@@ -145,6 +145,12 @@ npm run lint
 
 ## Key Architecture Decisions
 
+- **Super Admin bootstrap (Day 2)**: System-level administrators live in the separate `super_admins` table. The first must be created by the platform operator with `npm run bootstrap:superadmin -- <email> <password>`; public signup cannot create one. Login and 2FA now resolve both tenant users and Super Admins, issuing Super Admin sessions with `org_id: null`. Super Admin add/remove routes, including the 3-admin cap and last-admin guard, are deferred work.
+- **RBAC middleware (Day 2)**: Session-token authentication attaches typed user context. `requireRole` has explicit role lists with no Super Admin bypass; org scope checks and team/agent access helpers enforce tenant and exact-team-lead boundaries. Proof routes are `GET /admin/orgs` (Super Admin only) and `GET /teams/:teamId` (Org Admin or explicitly assigned Team Lead). Manual operations can add a second/third Super Admin with `npm run add:superadmin -- <email> <password>`; the script enforces the cap of three.
+- **Agent authentication (Day 2)**: `X-Agent-Key` authentication now permits only active and pending-deletion agents; pending-approval and paused agents are rejected. `GET /agent-test/ping` is a temporary proof route and must be removed when Day 3 proxy routes provide equivalent coverage.
+- **Day 2 status**: Tenant and Super Admin password/2FA authentication, RBAC, and agent API-key authentication are complete. Day 3 can begin proxy and provider-forwarding work.
+- **Open auth gap (Day 2)**: `users` has no individual account-status/blocked column. Login currently enforces organization blocking only; individual account blocking is deferred to the future access-control module.
+
 1. **Fastify** - Lightweight, TypeScript-friendly HTTP framework
 2. **PostgreSQL + Drizzle** - Type-safe ORM with migrations
 3. **Redis + BullMQ** - Job queue for background tasks (daily rollups, alerts)

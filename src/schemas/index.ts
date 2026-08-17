@@ -1,5 +1,6 @@
 import {
   boolean,
+  AnyPgColumn,
   integer,
   jsonb,
   numeric,
@@ -51,6 +52,16 @@ export const users = pgTable('users', {
 }, (table) => ({
   uqUsersOrgEmail: uniqueIndex('idx_users_org_id_email_unique').on(table.orgId, table.email),
 }))
+
+/** System-level operators. They are intentionally separate from tenant users. */
+export const superAdmins = pgTable('super_admins', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  twoFactorSecret: text('two_factor_secret'),
+  createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
 
 /** Teams, with hierarchy depth enforced by application logic. */
 export const teams = pgTable('teams', {
