@@ -29,8 +29,8 @@
 
 ### 🔌 Live API Endpoints
 
-| Endpoint | Method | Status |
-|----------|--------|--------|
+| Endpoint | Method | Status     |
+| -------- | ------ | ---------- |
 | /health  | GET    | ✅ Working |
 
 ### 🚧 Blockers
@@ -49,6 +49,7 @@
 - [ ] Create auth routes (src/routes/auth.ts) — POST /signup, /login, /verify-2fa
 
 **Expected deliverables**:
+
 - Fully functional user authentication
 - JWT token generation and validation
 - Test users and organizations in database
@@ -145,6 +146,12 @@ npm run lint
 
 ## Key Architecture Decisions
 
+- **Feature-based restructure (Day 2)**: Schema ownership now lives in `src/features/*/*.schema.db.ts`, with `src/db/schema.ts` as the sole Drizzle entrypoint. Route registration is centralized in `src/features/features.routes.ts`; authentication is split into user routes, controller, service, and repository. The temporary agent-auth and RBAC proof endpoints (`/agent-test/ping`, `/admin/orgs`, and `/teams/:teamId`) were removed. `npx tsc --noEmit` passes after the move. This checkout contains no Jest test files, so the prior live Day 1-2 flow suite could not be rerun here; it remains to be exercised against the configured live environment.
+- **Post-restructure live verification (2026-08-20)**: PostgreSQL and Redis were healthy and `npm run dev` stayed running. `GET /health` returned `200`. A fresh signup returned `201` with `orgId`, `userId`, and email; valid login returned `200` with `pendingToken` and `twoFactorConfigured: false`; invalid-password login returned `401 {"error":"Invalid credentials","code":"AUTH_ERROR"}`. 2FA setup returned `200` with a QR-code data URL and manual key; a real generated TOTP verified with `200`, returning a session JWT and the expected `org_admin` principal. Temporary verification-only routes were used and then removed: Developer-to-Super-Admin access returned `403 {"error":"Insufficient permissions","code":"FORBIDDEN"}`; cross-org Org Admin access returned `403 {"error":"Organization access denied","code":"FORBIDDEN"}`; pending and paused agents returned `403`, while an active agent returned `200`. The development command now explicitly preloads the existing `.env` via `dotenv -- tsx watch src/app.ts`.
+- **User-role folder consolidation (2026-08-20)**: Removed the unused `user/org_admin`, `user/team_lead`, `user/developer`, `user/finance`, `user/auditor`, and `user/super_admin` folders. The single `user.schema.db.ts` now owns `users`, `super_admins`, and `access_grants`; user route/controller/service/repository files remain the sole account/auth layers. Post-change live verification passed: health `200`; signup `201`; valid login `200`; invalid-password login `401`; 2FA setup `200`; TOTP verification/session `200`; Developer-to-Super-Admin and cross-org access `403`; pending/paused agent keys `403`; active agent key `200`. Temporary verification endpoints were removed after the checks.
+- **Day 3 Module 1 — Proxy forwarding (2026-08-24)**: Added `POST /proxy/:provider/*`, protected by existing `agentAuth`, plus controller/service/repository and OpenAI, Anthropic, and Gemini provider adapters. Provider API keys remain platform-held environment values; agents never supply provider keys. No cost, usage, budget, cache, or optimization logic was added. A paused seeded agent was rejected with `403` before forwarding. A controlled adapter test confirmed an active agent receives a `200` response with the original provider path/body and that the adapter is called exactly once. The configured OpenAI key returned OpenAI's real `401 invalid_api_key`, which the proxy now passes through unchanged; a real completion cannot be verified until a valid `OPENAI_API_KEY` is configured.
+- **Day 3 Module 2 — Cost calculation and usage logging (2026-08-24)**: Added `pricingRepository.getRate()` with organization override first and global fallback, provider-specific usage extraction, and fire-and-forget successful-call usage logging. Missing usage or pricing records a zero-token/zero-cost event (with warnings) because `usage_events.cost_usd` is non-null; this is a known pricing-data gap and does not block the agent response. Controlled end-to-end test with a seeded active Acme agent, the organization OpenAI `gpt-4o` rate (`$0.0040` input / `$0.0120` output per 1K), and a mocked successful provider response wrote two `usage_events` rows for one task: steps `1` and `2`, `1000` input tokens, `500` output tokens, `0.0100 USD` cost, `staging` environment, and `is_test: true`. The cost matched `(1000/1000 × 0.0040) + (500/1000 × 0.0120) = 0.0100`.
+
 - **Super Admin bootstrap (Day 2)**: System-level administrators live in the separate `super_admins` table. The first must be created by the platform operator with `npm run bootstrap:superadmin -- <email> <password>`; public signup cannot create one. Login and 2FA now resolve both tenant users and Super Admins, issuing Super Admin sessions with `org_id: null`. Super Admin add/remove routes, including the 3-admin cap and last-admin guard, are deferred work.
 - **RBAC middleware (Day 2)**: Session-token authentication attaches typed user context. `requireRole` has explicit role lists with no Super Admin bypass; org scope checks and team/agent access helpers enforce tenant and exact-team-lead boundaries. Proof routes are `GET /admin/orgs` (Super Admin only) and `GET /teams/:teamId` (Org Admin or explicitly assigned Team Lead). Manual operations can add a second/third Super Admin with `npm run add:superadmin -- <email> <password>`; the script enforces the cap of three.
 - **Agent authentication (Day 2)**: `X-Agent-Key` authentication now permits only active and pending-deletion agents; pending-approval and paused agents are rejected. `GET /agent-test/ping` is a temporary proof route and must be removed when Day 3 proxy routes provide equivalent coverage.
@@ -164,17 +171,20 @@ npm run lint
 ## Development Workflow
 
 ### Daily Updates
+
 - Add to this log at end of each day
 - Track completed tasks, blockers, schema changes
 - Update "Tomorrow" section for next day priorities
 
 ### Module Tracking
+
 - **Module 1** (Day 1): Schema + Authentication
 - **Module 2** (Day 2-3): Proxy + LLM Integration
 - **Module 3** (Day 3-4): Semantic Cache + Optimization
 - **Module 4** (Day 4): Budget + Alerts + Analytics
 
 ### Testing
+
 - Unit tests go in `tests/unit/`
 - Integration tests go in `tests/integration/`
 - Run with `npm test`

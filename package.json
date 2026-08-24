@@ -5,7 +5,7 @@
   "main": "dist/app.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "tsx watch src/app.ts",
+    "dev": "dotenv -- tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
     "test": "jest",

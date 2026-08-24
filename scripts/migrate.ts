@@ -1,2 +1,2 @@
 async function migrate() {}
-void migrate()
+void migrate();

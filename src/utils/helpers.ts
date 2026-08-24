@@ -1,1 +1,1 @@
-export const toIsoString = (date: Date) => date.toISOString()
+export const toIsoString = (date: Date) => date.toISOString();
