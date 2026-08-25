@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ProviderName } from './providers/provider.types';
 import { proxyService } from './proxy.service';
+import { ProviderError } from '../../utils/errors';
 
 export type ProxyRouteParams = { provider: string; '*': string };
 
@@ -29,11 +30,38 @@ export const proxyController = {
   async forward(request: FastifyRequest<{ Params: ProxyRouteParams }>, reply: FastifyReply) {
     // agentAuth has already authenticated this request and attached request.agent.
     const path = getForwardPath(request);
-    const { response, latencyMs } = await proxyService.forward(
-      request.params.provider,
-      path,
-      request.body
-    );
+    const isTest = getHeaderValue(request, 'x-is-test') === 'true';
+    const taskId = getHeaderValue(request, 'x-task-id') ?? randomUUID();
+    const environment = getEnvironment(request);
+    let response;
+    let latencyMs;
+    let cacheHit;
+    let originalTokenCount;
+    let optimizedTokenCount;
+    try {
+      ({ response, latencyMs, cacheHit, originalTokenCount, optimizedTokenCount } = await proxyService.forward(
+        request.params.provider,
+        path,
+        request.body,
+        request.agent,
+        isTest
+      ));
+    } catch (error) {
+      if (error instanceof ProviderError) {
+        void proxyService.recordFailedUsage({
+          agent: request.agent,
+          provider: request.params.provider as ProviderName,
+          path,
+          body: request.body,
+          taskId,
+          environment,
+          isTest,
+          latencyMs: error.latencyMs,
+          status: error.isTimeout ? 'timeout' : 'error',
+        });
+      }
+      throw error;
+    }
 
     if (isJsonPayload(response.data)) {
       reply.type('application/json');
@@ -44,18 +72,36 @@ export const proxyController = {
 
     reply.status(response.status).send(response.data);
 
-    // Usage writes are intentionally asynchronous so they never delay the agent response.
-    void proxyService.recordSuccessfulUsage({
+    const usageInput = {
       agent: request.agent,
       provider: request.params.provider as ProviderName,
       path,
       body: request.body,
-      taskId: getHeaderValue(request, 'x-task-id') ?? randomUUID(),
-      environment: getEnvironment(request),
-      isTest: getHeaderValue(request, 'x-is-test') === 'true',
+      taskId,
+      environment,
+      isTest,
       response,
       latencyMs,
-    });
+      originalTokenCount,
+      optimizedTokenCount,
+    };
+
+    // Usage writes are intentionally asynchronous so they never delay the agent response.
+    if (cacheHit) {
+      void proxyService.recordCacheHitUsage({
+        agent: usageInput.agent,
+        provider: usageInput.provider,
+        path: usageInput.path,
+        body: usageInput.body,
+        taskId: usageInput.taskId,
+        environment: usageInput.environment,
+        isTest: usageInput.isTest,
+      });
+    } else {
+      void proxyService
+        .recordSuccessfulUsage(usageInput)
+        .then(() => proxyService.cacheSuccessfulResponse(usageInput));
+    }
 
     return reply;
   },

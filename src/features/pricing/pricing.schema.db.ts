@@ -3,7 +3,8 @@ const ts = () => ({
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
-const money = (n: string) => numeric(n, { precision: 12, scale: 4 }).notNull();
+// Provider rates can be below one ten-thousandth of a dollar per 1K tokens.
+const money = (n: string) => numeric(n, { precision: 12, scale: 6 }).notNull();
 export const pricingTable = pgTable(
   'pricing_table',
   {

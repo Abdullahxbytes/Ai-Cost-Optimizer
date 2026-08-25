@@ -14,7 +14,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   EMBEDDING_API_KEY: z.string().optional(),
-  EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),

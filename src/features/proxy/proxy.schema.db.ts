@@ -11,6 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { agents } from '../agents/agents.schema.db';
 const ts = () => ({
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -24,7 +25,9 @@ export const usageEvents = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     orgId: uuid('org_id').notNull(),
-    agentId: uuid('agent_id').notNull(),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
     taskId: uuid('task_id'),
     stepNumber: integer('step_number'),
     provider: text('provider').notNull(),

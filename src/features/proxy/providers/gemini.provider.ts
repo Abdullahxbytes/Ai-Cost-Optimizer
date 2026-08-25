@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { PROVIDER_REQUEST_TIMEOUT_MS } from '../../../config/constants';
 import { ProviderAdapter, ProviderResponse } from './provider.types';
 
 const baseUrl = 'https://generativelanguage.googleapis.com';
@@ -14,6 +15,7 @@ export const geminiProvider: ProviderAdapter = {
     const response = await axios.post(path, body, {
       baseURL: baseUrl,
       headers: this.buildHeaders(apiKey),
+      timeout: PROVIDER_REQUEST_TIMEOUT_MS,
       params: { key: apiKey },
       validateStatus: () => true,
     });

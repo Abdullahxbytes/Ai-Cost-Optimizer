@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { PROVIDER_REQUEST_TIMEOUT_MS } from '../../../config/constants';
 import { ProviderAdapter, ProviderResponse } from './provider.types';
 
 const baseUrl = 'https://api.openai.com';
@@ -17,6 +18,7 @@ export const openaiProvider: ProviderAdapter = {
     const response = await axios.post(path, body, {
       baseURL: baseUrl,
       headers: this.buildHeaders(apiKey),
+      timeout: PROVIDER_REQUEST_TIMEOUT_MS,
       validateStatus: () => true,
     });
 

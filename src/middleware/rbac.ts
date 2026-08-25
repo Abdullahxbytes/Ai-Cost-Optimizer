@@ -1,7 +1,7 @@
 import { FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db } from '../config/database';
-import { agents, teams } from '../db/schema';
+import { agents, orgs, teams } from '../db/schema';
 import { AuthenticatedUser, Role } from './auth';
 import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 
@@ -14,8 +14,16 @@ export function requireRole(allowedRoles: Role[]) {
 
 export function requireOrgScope() {
   return async (request: FastifyRequest) => {
-    const params = request.params as { teamId?: string; agentId?: string };
-    const resource = params.teamId
+    const params = request.params as { orgId?: string; teamId?: string; agentId?: string };
+    const resource = params.orgId
+      ? (
+          await db
+            .select({ orgId: orgs.id })
+            .from(orgs)
+            .where(eq(orgs.id, params.orgId))
+            .limit(1)
+        )[0]
+      : params.teamId
       ? (
           await db
             .select({ orgId: teams.orgId })
@@ -33,7 +41,7 @@ export function requireOrgScope() {
           )[0]
         : undefined;
     if (!resource) {
-      if (!params.teamId && !params.agentId)
+      if (!params.orgId && !params.teamId && !params.agentId)
         throw new ValidationError('No scoped resource route parameter provided');
       throw new NotFoundError('Resource not found');
     }

@@ -33,3 +33,18 @@ export class RateLimitError extends AppError {
     super(429, 'Rate limit exceeded', 'RATE_LIMIT');
   }
 }
+
+export class BudgetExceededError extends AppError {
+  constructor(public scope: 'org' | 'team' | 'agent') {
+    super(429, 'Budget exceeded', 'BUDGET_EXCEEDED');
+  }
+}
+
+export class ProviderError extends AppError {
+  constructor(
+    public readonly latencyMs: number,
+    public readonly isTimeout = false
+  ) {
+    super(502, 'Provider request failed', 'PROVIDER_ERROR');
+  }
+}

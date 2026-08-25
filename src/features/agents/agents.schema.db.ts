@@ -47,7 +47,9 @@ export const agents = pgTable(
 export const agentApprovals = pgTable('agent_approvals', {
   id: uuid('id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
-  agentId: uuid('agent_id').notNull(),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
   requestedBy: uuid('requested_by').notNull(),
   approvedBy: uuid('approved_by'),
   status: requestStatusEnum('status').default('pending').notNull(),
@@ -61,6 +63,7 @@ export const agentApprovals = pgTable('agent_approvals', {
 export const agentDeletions = pgTable('agent_deletions', {
   id: uuid('id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
+  // This operational workflow record is intentionally deleted explicitly after confirmation.
   agentId: uuid('agent_id').notNull(),
   csvExportUrl: text('csv_export_url'),
   recipientUserId: uuid('recipient_user_id').notNull(),
@@ -72,7 +75,9 @@ export const agentDeletions = pgTable('agent_deletions', {
 export const agentTasks = pgTable('agent_tasks', {
   taskId: uuid('task_id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
-  agentId: uuid('agent_id').notNull(),
+  agentId: uuid('agent_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
   startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
   endedAt: timestamp('ended_at', { withTimezone: true }),
   status: taskStatusEnum('status').default('pending').notNull(),

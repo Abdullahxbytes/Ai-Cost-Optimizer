@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AppError, RateLimitError } from '../utils/errors';
+import { AppError, BudgetExceededError, RateLimitError } from '../utils/errors';
 import { logger } from '../utils/logger';
 export async function errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply) {
   if (error instanceof AppError) {
@@ -10,6 +10,7 @@ export async function errorHandler(error: Error, request: FastifyRequest, reply:
         error: error.message,
         code: error.code,
         ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
+        ...(error instanceof BudgetExceededError && { scope: error.scope }),
       });
   }
   logger.error({ error, url: request.url }, 'Unhandled error');

@@ -5,6 +5,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+exports/
 .idea/
 *.swp
 *.swo
