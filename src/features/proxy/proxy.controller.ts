@@ -38,8 +38,9 @@ export const proxyController = {
     let cacheHit;
     let originalTokenCount;
     let optimizedTokenCount;
+    let budgetReservation;
     try {
-      ({ response, latencyMs, cacheHit, originalTokenCount, optimizedTokenCount } = await proxyService.forward(
+      ({ response, latencyMs, cacheHit, originalTokenCount, optimizedTokenCount, budgetReservation } = await proxyService.forward(
         request.params.provider,
         path,
         request.body,
@@ -70,8 +71,6 @@ export const proxyController = {
       if (typeof contentType === 'string') reply.header('content-type', contentType);
     }
 
-    reply.status(response.status).send(response.data);
-
     const usageInput = {
       agent: request.agent,
       provider: request.params.provider as ProviderName,
@@ -84,9 +83,9 @@ export const proxyController = {
       latencyMs,
       originalTokenCount,
       optimizedTokenCount,
+      budgetReservation,
     };
 
-    // Usage writes are intentionally asynchronous so they never delay the agent response.
     if (cacheHit) {
       void proxyService.recordCacheHitUsage({
         agent: usageInput.agent,
@@ -98,11 +97,12 @@ export const proxyController = {
         isTest: usageInput.isTest,
       });
     } else {
-      void proxyService
-        .recordSuccessfulUsage(usageInput)
-        .then(() => proxyService.cacheSuccessfulResponse(usageInput));
+      // The reservation is deliberately held until the exact provider cost is recorded.
+      await proxyService.recordSuccessfulUsage(usageInput);
+      void proxyService.cacheSuccessfulResponse(usageInput);
     }
 
+    reply.status(response.status).send(response.data);
     return reply;
   },
 };

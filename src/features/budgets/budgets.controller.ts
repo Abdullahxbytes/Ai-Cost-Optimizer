@@ -15,6 +15,7 @@ export const budgetsController = {
   create(request: FastifyRequest) { const body = parse(createSchema, request.body); return budgetsService.create(request.user, body as { scope: BudgetScope; scopeId: string; limitAmount: number; period: 'daily' | 'monthly' }); },
   list: (request: FastifyRequest) => budgetsService.list(request.user),
   update(request: FastifyRequest<{ Params: BudgetParams }>) { return budgetsService.update(request.user, request.params.budgetId, parse(limitSchema, request.body).limitAmount); },
+  remove(request: FastifyRequest<{ Params: BudgetParams }>) { return budgetsService.remove(request.user, request.params.budgetId); },
   requestIncrease(request: FastifyRequest<{ Params: BudgetParams }>) { return budgetsService.requestIncrease(request.user, request.params.budgetId, parse(requestSchema, request.body).requestedAmount); },
   listRequests: (request: FastifyRequest) => budgetsService.listPendingRequests(request.user.orgId!),
   approve: (request: FastifyRequest<{ Params: RequestParams }>) => budgetsService.decideRequest(request.params.requestId, true, request.user),

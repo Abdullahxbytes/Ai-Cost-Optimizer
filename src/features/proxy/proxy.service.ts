@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
+import { providerKeysService } from '../provider-keys/provider-keys.service';
 import { DEFAULT_RATE_LIMIT_PER_MINUTE } from '../../config/constants';
 import { redis } from '../../config/redis';
 import { AuthenticatedAgent } from '../../middleware/agentAuth';
@@ -13,6 +14,7 @@ import {
 } from '../../utils/errors';
 import { logger } from '../../utils/logger';
 import { Budget, BudgetScope, budgetsRepository } from '../budgets/budgets.repository';
+import { getBudgetCounterTtlSeconds, getBudgetSpendKey } from '../budgets/budget.redis';
 import { optimizationRepository } from '../optimization/optimization.repository';
 import { pricingRepository } from '../pricing/pricing.repository';
 import { anthropicProvider } from './providers/anthropic.provider';
@@ -20,12 +22,9 @@ import { geminiProvider } from './providers/gemini.provider';
 import { openaiProvider } from './providers/openai.provider';
 import { ProviderAdapter, ProviderName, ProviderResponse } from './providers/provider.types';
 import { proxyRepository } from './proxy.repository';
-import { extractPromptText, injectOptimizedText } from './proxy.prompt-extractor';
-import { extractUsage } from './proxy.usage-extractor';
 
 type ProviderConfiguration = {
   adapter: ProviderAdapter;
-  apiKey: string | undefined;
 };
 
 export type ProxyForwardResult = {
@@ -34,9 +33,72 @@ export type ProxyForwardResult = {
   cacheHit: boolean;
   originalTokenCount?: number;
   optimizedTokenCount?: number;
+  budgetReservation?: BudgetReservation;
 };
 
 type ApplicableBudget = { scope: BudgetScope; scopeId: string; budget: Budget };
+type BudgetLock = { key: string; token: string };
+type BudgetReservation = { applicableBudgets: ApplicableBudget[]; locks: BudgetLock[] };
+type TokenUsage = { inputTokens: number; outputTokens: number };
+
+function textFromContent(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return null;
+  const text = content.map((part) => typeof part === 'object' && part !== null && typeof (part as { text?: unknown }).text === 'string' ? (part as { text: string }).text : '').filter(Boolean).join('\n');
+  return text || null;
+}
+
+function extractPromptText(provider: ProviderName, requestBody: unknown): string | null {
+  if (typeof requestBody !== 'object' || requestBody === null) return null;
+  const body = requestBody as { messages?: unknown; contents?: unknown };
+  const entries = provider === 'gemini' ? body.contents : body.messages;
+  if (!Array.isArray(entries)) return null;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as { content?: unknown; parts?: unknown };
+    const text = textFromContent(provider === 'gemini' ? record.parts : record.content);
+    if (text) return text;
+  }
+  return null;
+}
+
+function injectOptimizedText(provider: ProviderName, requestBody: unknown, newText: string): unknown {
+  if (typeof requestBody !== 'object' || requestBody === null) return requestBody;
+  const body = { ...(requestBody as Record<string, unknown>) };
+  const collectionKey = provider === 'gemini' ? 'contents' : 'messages';
+  const entries = body[collectionKey];
+  if (!Array.isArray(entries)) return requestBody;
+  const updated = [...entries];
+  for (let i = updated.length - 1; i >= 0; i -= 1) {
+    const entry = updated[i];
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const contentKey = provider === 'gemini' ? 'parts' : 'content';
+    const content = record[contentKey];
+    if (typeof content === 'string') { updated[i] = { ...record, [contentKey]: newText }; return { ...body, [collectionKey]: updated }; }
+    if (Array.isArray(content) && textFromContent(content)) {
+      let replaced = false;
+      updated[i] = { ...record, [contentKey]: content.map((part) => {
+        if (typeof part !== 'object' || part === null || typeof (part as { text?: unknown }).text !== 'string') return part;
+        if (replaced) return { ...(part as Record<string, unknown>), text: '' };
+        replaced = true; return { ...(part as Record<string, unknown>), text: newText };
+      })};
+      return { ...body, [collectionKey]: updated };
+    }
+  }
+  return requestBody;
+}
+
+function extractUsage(provider: ProviderName, response: unknown): TokenUsage | undefined {
+  if (typeof response !== 'object' || response === null) return undefined;
+  const usage = (response as Record<string, unknown>)[provider === 'gemini' ? 'usageMetadata' : 'usage'];
+  if (typeof usage !== 'object' || usage === null) return undefined;
+  const row = usage as Record<string, unknown>;
+  const input = provider === 'openai' ? row.prompt_tokens : provider === 'anthropic' ? row.input_tokens : row.promptTokenCount;
+  const output = provider === 'openai' ? row.completion_tokens : provider === 'anthropic' ? row.output_tokens : row.candidatesTokenCount;
+  return typeof input === 'number' && Number.isInteger(input) && input >= 0 && typeof output === 'number' && Number.isInteger(output) && output >= 0 ? { inputTokens: input, outputTokens: output } : undefined;
+}
 
 export type UsageLoggingInput = {
   agent: AuthenticatedAgent;
@@ -50,6 +112,7 @@ export type UsageLoggingInput = {
   latencyMs: number;
   originalTokenCount?: number;
   optimizedTokenCount?: number;
+  budgetReservation?: BudgetReservation;
 };
 
 export type FailedUsageLoggingInput = Omit<
@@ -61,9 +124,9 @@ export type FailedUsageLoggingInput = Omit<
 };
 
 const providers: Record<ProviderName, ProviderConfiguration> = {
-  openai: { adapter: openaiProvider, apiKey: env.OPENAI_API_KEY },
-  anthropic: { adapter: anthropicProvider, apiKey: env.ANTHROPIC_API_KEY },
-  gemini: { adapter: geminiProvider, apiKey: env.GEMINI_API_KEY },
+  openai: { adapter: openaiProvider },
+  anthropic: { adapter: anthropicProvider },
+  gemini: { adapter: geminiProvider },
 };
 
 function getProviderConfiguration(provider: string): ProviderConfiguration {
@@ -103,33 +166,6 @@ function calculateCostUsd(
   const cost =
     (inputTokens / 1000) * rate.inputPricePer1k + (outputTokens / 1000) * rate.outputPricePer1k;
   return cost.toFixed(4);
-}
-
-function getPeriodKey(period: Budget['period'], timezone: string, date = new Date()): string {
-  const values = new Map(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(date)
-      .map((part) => [part.type, part.value])
-  );
-  const year = values.get('year');
-  const month = values.get('month');
-  const day = values.get('day');
-
-  if (!year || !month || !day) throw new Error(`Unable to calculate budget period for ${timezone}`);
-  return period === 'monthly' ? `${year}-${month}` : `${year}-${month}-${day}`;
-}
-
-function getSpendKey(scope: BudgetScope, scopeId: string, budget: Budget): string {
-  return `budget:spend:${scope}:${scopeId}:${getPeriodKey(budget.period, budget.resetTimezone)}`;
-}
-
-function getBudgetTtlSeconds(period: Budget['period']): number {
-  return period === 'monthly' ? 32 * 24 * 60 * 60 : 25 * 60 * 60;
 }
 
 function getRateLimitWindow(now = Date.now()): { keySuffix: number; retryAfter: number } {
@@ -189,6 +225,14 @@ function isTimeoutError(error: unknown): boolean {
   );
 }
 
+function providerMessage(data: unknown): string | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const error = (data as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return undefined;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' ? message.slice(0, 500) : undefined;
+}
+
 async function forwardWithRetries(
   adapter: ProviderAdapter,
   path: string,
@@ -198,13 +242,20 @@ async function forwardWithRetries(
 ): Promise<ProviderResponse> {
   const maxAttempts = 3;
   let lastError: unknown;
+  let lastProviderResponse: ProviderResponse | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const response = await adapter.forward(path, body, apiKey);
       if (response.status >= 200 && response.status < 300) return response;
+      lastProviderResponse = response;
       if (response.status >= 400 && response.status < 500) {
-        throw new ProviderError(Date.now() - startedAt);
+        throw new ProviderError(
+          Date.now() - startedAt,
+          false,
+          response.status,
+          providerMessage(response.data)
+        );
       }
       lastError = new Error(`Provider returned ${response.status}`);
     } catch (error) {
@@ -215,7 +266,12 @@ async function forwardWithRetries(
     if (attempt < maxAttempts) await delay(200 * 2 ** (attempt - 1));
   }
 
-  throw new ProviderError(Date.now() - startedAt, isTimeoutError(lastError));
+  throw new ProviderError(
+    Date.now() - startedAt,
+    isTimeoutError(lastError),
+    lastProviderResponse?.status,
+    lastProviderResponse && providerMessage(lastProviderResponse.data)
+  );
 }
 
 async function getApplicableBudgets(agent: AuthenticatedAgent): Promise<ApplicableBudget[]> {
@@ -236,15 +292,53 @@ async function getApplicableBudgets(agent: AuthenticatedAgent): Promise<Applicab
 }
 
 async function incrementBudgetCounter(applicableBudget: ApplicableBudget, costUsd: string): Promise<void> {
-  const key = getSpendKey(
+  const key = getBudgetSpendKey(
     applicableBudget.scope,
     applicableBudget.scopeId,
     applicableBudget.budget
   );
-  await redis.incrByFloat(key, Number(costUsd));
-  if ((await redis.ttl(key)) === -1) {
-    await redis.expire(key, getBudgetTtlSeconds(applicableBudget.budget.period));
+  await redis.eval(
+    "local value = redis.call('INCRBYFLOAT', KEYS[1], ARGV[1]); if redis.call('TTL', KEYS[1]) == -1 then redis.call('EXPIRE', KEYS[1], ARGV[2]); end; return value",
+    { keys: [key], arguments: [costUsd, String(getBudgetCounterTtlSeconds(applicableBudget.budget.period))] }
+  );
+}
+
+async function releaseBudgetLocks(locks: BudgetLock[]): Promise<void> {
+  await Promise.all(locks.map(({ key, token }) => redis.eval(
+    "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0",
+    { keys: [key], arguments: [token] }
+  )));
+}
+
+async function acquireBudgetReservation(agent: AuthenticatedAgent, isTest: boolean): Promise<BudgetReservation | undefined> {
+  if (isTest) return undefined;
+  const applicableBudgets = await getApplicableBudgets(agent);
+  const lockKeys = applicableBudgets.map((item) => `budget:lock:${item.scope}:${item.scopeId}`).sort();
+  const token = randomUUID();
+  const deadline = Date.now() + 5_000;
+  let locks: BudgetLock[] = [];
+  while (Date.now() < deadline) {
+    locks = [];
+    for (const key of lockKeys) {
+      if (await redis.set(key, token, { NX: true, PX: 120_000 })) locks.push({ key, token });
+      else break;
+    }
+    if (locks.length === lockKeys.length) break;
+    await releaseBudgetLocks(locks);
+    await delay(50);
   }
+  if (locks.length !== lockKeys.length) {
+    await releaseBudgetLocks(locks);
+    throw new AppError(503, 'Budget enforcement is busy; retry shortly', 'BUDGET_ENFORCEMENT_BUSY');
+  }
+  for (const applicableBudget of applicableBudgets) {
+    const currentSpend = Number((await redis.get(getBudgetSpendKey(applicableBudget.scope, applicableBudget.scopeId, applicableBudget.budget))) ?? '0');
+    if (currentSpend >= applicableBudget.budget.limitAmount) {
+      await releaseBudgetLocks(locks);
+      throw new BudgetExceededError(applicableBudget.scope);
+    }
+  }
+  return { applicableBudgets, locks };
 }
 
 async function createEmbedding(prompt: string): Promise<number[] | null> {
@@ -317,46 +411,27 @@ export const proxyService = {
       throw new ForbiddenError('Agent killed');
     }
 
-    if (!isTest) {
-      const applicableBudgets = await getApplicableBudgets(agent);
-      for (const applicableBudget of applicableBudgets) {
-        const currentSpend = Number(
-          (await redis.get(
-            getSpendKey(applicableBudget.scope, applicableBudget.scopeId, applicableBudget.budget)
-          )) ?? '0'
-        );
-        if (currentSpend >= applicableBudget.budget.limitAmount) {
-          throw new BudgetExceededError(applicableBudget.scope);
-        }
+    const budgetReservation = await acquireBudgetReservation(agent, isTest);
+    try {
+      await enforceRateLimit(agent.id);
+      const configuration = getProviderConfiguration(provider);
+      const providerName = provider as ProviderName;
+      const cachedResponse = await findCachedResponse(providerName, body, agent);
+      if (cachedResponse) {
+        if (budgetReservation) await releaseBudgetLocks(budgetReservation.locks);
+        return { response: cachedResponse, latencyMs: 0, cacheHit: true };
       }
+      const optimizedRequest = await optimizeRequestBody(providerName, body, agent);
+      const { adapter } = configuration;
+      const apiKey = await providerKeysService.getPlaintext(agent.orgId, providerName);
+      if (!apiKey) throw new AppError(400, 'No API key configured for this provider. Add one in your organization settings.', 'PROVIDER_KEY_MISSING');
+      const startedAt = Date.now();
+      const response = await forwardWithRetries(adapter, normalizePath(path), optimizedRequest.body, apiKey, startedAt);
+      return { response, latencyMs: Date.now() - startedAt, cacheHit: false, originalTokenCount: optimizedRequest.originalTokenCount, optimizedTokenCount: optimizedRequest.optimizedTokenCount, budgetReservation };
+    } catch (error) {
+      if (budgetReservation) await releaseBudgetLocks(budgetReservation.locks);
+      throw error;
     }
-
-    await enforceRateLimit(agent.id);
-
-    const configuration = getProviderConfiguration(provider);
-    const providerName = provider as ProviderName;
-    const cachedResponse = await findCachedResponse(providerName, body, agent);
-    if (cachedResponse) return { response: cachedResponse, latencyMs: 0, cacheHit: true };
-
-    const optimizedRequest = await optimizeRequestBody(providerName, body, agent);
-
-    const { adapter, apiKey } = configuration;
-    if (!apiKey) {
-      throw new AppError(503, `Provider ${provider} is not configured`, 'PROVIDER_NOT_CONFIGURED');
-    }
-
-    const normalizedPath = normalizePath(path);
-    const startedAt = Date.now();
-
-    // Agents authenticate only with our X-Agent-Key. Provider keys stay in platform configuration.
-    const response = await forwardWithRetries(adapter, normalizedPath, optimizedRequest.body, apiKey, startedAt);
-    return {
-      response,
-      latencyMs: Date.now() - startedAt,
-      cacheHit: false,
-      originalTokenCount: optimizedRequest.originalTokenCount,
-      optimizedTokenCount: optimizedRequest.optimizedTokenCount,
-    };
   },
 
   async recordSuccessfulUsage(input: UsageLoggingInput): Promise<void> {
@@ -411,7 +486,7 @@ export const proxyService = {
       });
 
       if (!input.isTest) {
-        const applicableBudgets = await getApplicableBudgets(input.agent);
+        const applicableBudgets = input.budgetReservation?.applicableBudgets ?? await getApplicableBudgets(input.agent);
         await Promise.all(
           applicableBudgets.map((applicableBudget) => incrementBudgetCounter(applicableBudget, costUsd))
         );
@@ -421,6 +496,8 @@ export const proxyService = {
         { error, provider: input.provider, model, agentId: input.agent.id },
         'Unable to record proxy usage event'
       );
+    } finally {
+      if (input.budgetReservation) await releaseBudgetLocks(input.budgetReservation.locks);
     }
   },
 

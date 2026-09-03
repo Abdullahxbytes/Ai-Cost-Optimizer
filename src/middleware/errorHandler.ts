@@ -1,18 +1,23 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AppError, BudgetExceededError, RateLimitError } from '../utils/errors';
+import { AppError, BudgetExceededError, ProviderError, RateLimitError } from '../utils/errors';
 import { logger } from '../utils/logger';
-export async function errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply) {
-  if (error instanceof AppError) {
-    logger.warn({ error, url: request.url }, 'Application error');
+export async function errorHandler(error: unknown, request: FastifyRequest, reply: FastifyReply) {
+  const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+  if (normalizedError instanceof AppError) {
+    logger.warn({ error: normalizedError, url: request.url }, 'Application error');
     return reply
-      .status(error.statusCode)
+      .status(normalizedError.statusCode)
       .send({
-        error: error.message,
-        code: error.code,
-        ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
-        ...(error instanceof BudgetExceededError && { scope: error.scope }),
+        error: normalizedError.message,
+        code: normalizedError.code,
+        ...(normalizedError instanceof RateLimitError && { retryAfter: normalizedError.retryAfter }),
+        ...(normalizedError instanceof BudgetExceededError && { scope: normalizedError.scope }),
+        ...(normalizedError instanceof ProviderError && {
+          providerStatus: normalizedError.providerStatus,
+          providerMessage: normalizedError.providerMessage,
+        }),
       });
   }
-  logger.error({ error, url: request.url }, 'Unhandled error');
+  logger.error({ error: normalizedError, url: request.url }, 'Unhandled error');
   return reply.status(500).send({ error: 'Internal server error' });
 }

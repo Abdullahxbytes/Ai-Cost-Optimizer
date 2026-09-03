@@ -52,21 +52,23 @@ export function requireOrgScope() {
 
 export async function canAccessTeam(user: AuthenticatedUser, teamId: string): Promise<boolean> {
   const [team] = await db
-    .select({ orgId: teams.orgId, teamLeadId: teams.teamLeadId })
+    .select({ orgId: teams.orgId, teamLeadId: teams.teamLeadId, status: teams.status })
     .from(teams)
     .where(eq(teams.id, teamId))
     .limit(1);
-  if (!team || user.orgId !== team.orgId) return false;
+  if (!team || team.status !== 'active' || user.orgId !== team.orgId) return false;
   return user.role === 'org_admin' || (user.role === 'team_lead' && team.teamLeadId === user.id);
 }
 
 export async function canAccessAgent(user: AuthenticatedUser, agentId: string): Promise<boolean> {
   const [agent] = await db
-    .select({ orgId: agents.orgId, teamId: agents.teamId, ownerUserId: agents.ownerUserId })
+    .select({ orgId: agents.orgId, teamId: agents.teamId, ownerUserId: agents.ownerUserId, teamStatus: teams.status })
     .from(agents)
+    .leftJoin(teams, eq(agents.teamId, teams.id))
     .where(eq(agents.id, agentId))
     .limit(1);
   if (!agent || user.orgId !== agent.orgId) return false;
+  if (agent.teamStatus === 'archived') return false;
   if (user.role === 'org_admin') return true;
   if (user.role === 'developer' && agent.ownerUserId === user.id) return true;
   return user.role === 'team_lead' && agent.teamId !== null && canAccessTeam(user, agent.teamId);

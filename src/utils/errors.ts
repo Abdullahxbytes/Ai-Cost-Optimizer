@@ -43,8 +43,14 @@ export class BudgetExceededError extends AppError {
 export class ProviderError extends AppError {
   constructor(
     public readonly latencyMs: number,
-    public readonly isTimeout = false
+    public readonly isTimeout = false,
+    public readonly providerStatus?: number,
+    public readonly providerMessage?: string
   ) {
-    super(502, 'Provider request failed', 'PROVIDER_ERROR');
+    super(
+      providerStatus === 429 ? 429 : 502,
+      providerStatus === 429 ? 'Provider rate limit exceeded' : 'Provider request failed',
+      providerStatus === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_ERROR'
+    );
   }
 }

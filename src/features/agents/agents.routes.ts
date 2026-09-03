@@ -10,6 +10,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/agents', { preHandler: [authenticate, requireRole(['developer', 'team_lead', 'org_admin'])] }, (request) =>
     agentsController.list(request)
   );
+  app.get('/agent-deletions', { preHandler: [authenticate] }, (request) => agentsController.listMyPendingDeletions(request));
   const scoped = [authenticate, requireRole(['developer', 'team_lead', 'org_admin']), requireOrgScope()];
   app.get('/agents/:agentId', { preHandler: scoped }, (request) => agentsController.get(request as never));
   const approver = [authenticate, requireRole(['team_lead', 'org_admin']), requireOrgScope()];

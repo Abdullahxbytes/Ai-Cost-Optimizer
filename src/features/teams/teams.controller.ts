@@ -7,6 +7,8 @@ import { teamsService } from './teams.service';
 type TeamParams = { teamId: string };
 const createSchema = z.object({ name: z.string().trim().min(1), teamLeadId: z.string().uuid().optional() }).strict();
 const updateSchema = z.object({ name: z.string().trim().min(1).optional(), teamLeadId: z.string().uuid().optional() }).strict();
+const memberSchema = z.object({ userId: z.string().uuid() }).strict();
+const deletionSchema = z.object({ mode: z.enum(['purge_now', 'archive_15_days']) }).strict();
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);
@@ -41,5 +43,37 @@ export const teamsController = {
     await requireTeamAccess(request);
     const body = parse(createSchema, request.body);
     return teamsService.createSubTeam(request.params.teamId, request.user.id, body.name, body.teamLeadId);
+  },
+  async listMembers(request: FastifyRequest<{ Params: TeamParams }>) {
+    await requireTeamAccess(request);
+    return teamsService.listMembers(request.params.teamId);
+  },
+  async listAvailableDevelopers(request: FastifyRequest<{ Params: TeamParams }>) {
+    await requireTeamAccess(request);
+    return teamsService.listAvailableDevelopers(request.params.teamId);
+  },
+  async addMember(request: FastifyRequest<{ Params: TeamParams }>) {
+    await requireTeamAccess(request);
+    const body = parse(memberSchema, request.body);
+    await teamsService.addDeveloper(request.params.teamId, body.userId);
+    return { ok: true };
+  },
+  async removeMember(request: FastifyRequest<{ Params: TeamParams & { userId: string } }>) {
+    await requireTeamAccess(request);
+    if (!z.string().uuid().safeParse(request.params.userId).success) throw new ValidationError('Invalid user id');
+    await teamsService.removeDeveloper(request.params.teamId, request.params.userId);
+    return { ok: true };
+  },
+  async requestDeletion(request: FastifyRequest<{ Params: TeamParams }>) {
+    const body = parse(deletionSchema, request.body);
+    return teamsService.requestDeletion(request.params.teamId, request.user, body.mode);
+  },
+  async listArchivedDeletions(request: FastifyRequest) {
+    return teamsService.listArchivedDeletions(request.user);
+  },
+  async exportArchivedDeletion(request: FastifyRequest<{ Params: { deletionId: string } }>, reply: import('fastify').FastifyReply) {
+    const { team, csv } = await teamsService.exportArchivedTeam(request.params.deletionId, request.user);
+    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="${team.name.replace(/[^a-z0-9_-]/gi, '_')}-archive.csv"`);
+    return reply.send(csv);
   },
 };

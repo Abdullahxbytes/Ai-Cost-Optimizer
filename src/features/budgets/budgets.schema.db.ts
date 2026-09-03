@@ -1,4 +1,4 @@
-import { check, index, numeric, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, index, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 export const budgetScopeEnum = pgEnum('budget_scope', ['org', 'team', 'agent']);
 export const budgetPeriodEnum = pgEnum('budget_period', ['daily', 'monthly']);
@@ -23,6 +23,7 @@ export const budgets = pgTable(
   },
   (t) => ({
     idxBudgetsScopeScopeId: index('idx_budgets_scope_scope_id').on(t.scope, t.scopeId),
+    uqBudgetsScopeScopeId: uniqueIndex('uq_budgets_scope_scope_id').on(t.scope, t.scopeId),
     chkBudgetsLimitAmountPositive: check(
       'chk_budgets_limit_amount_positive',
       sql`${t.limitAmount} > 0`

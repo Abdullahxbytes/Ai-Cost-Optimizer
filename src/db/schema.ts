@@ -15,6 +15,7 @@ import { optimizationRules, semanticCache } from '../features/optimization/optim
 import { alerts, alertHistory } from '../features/alerts/alerts.schema.db';
 import { auditLog } from '../features/audit/audit.schema.db';
 import { notifications } from '../features/notifications/notifications.schema.db';
+import { orgProviderKeys } from '../features/provider-keys/provider-keys.schema.db';
 export * from '../features/user/user.schema.db';
 export * from '../features/orgs/orgs.schema.db';
 export * from '../features/teams/teams.schema.db';
@@ -26,6 +27,7 @@ export * from '../features/optimization/optimization.schema.db';
 export * from '../features/alerts/alerts.schema.db';
 export * from '../features/audit/audit.schema.db';
 export * from '../features/notifications/notifications.schema.db';
+export * from '../features/provider-keys/provider-keys.schema.db';
 export const orgsRelations = relations(orgs, ({ many }) => ({
   users: many(users),
   teams: many(teams),
@@ -36,6 +38,7 @@ export const orgsRelations = relations(orgs, ({ many }) => ({
   auditEntries: many(auditLog),
   notifications: many(notifications),
   accessGrants: many(accessGrants),
+  providerKeys: many(orgProviderKeys),
 }));
 export const usersRelations = relations(users, ({ one, many }) => ({
   organization: one(orgs, { fields: [users.orgId], references: [orgs.id] }),

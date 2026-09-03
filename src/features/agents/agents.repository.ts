@@ -4,17 +4,20 @@ import { auditLog } from '../audit/audit.schema.db';
 import { budgetRequests, budgets } from '../budgets/budgets.schema.db';
 import { usageEvents } from '../proxy/proxy.schema.db';
 import { teams } from '../teams/teams.schema.db';
+import { users } from '../user/user.schema.db';
 import { agentApprovals, agentDeletions, agents } from './agents.schema.db';
+import { hashAgentKey } from '../../utils/agentKey';
 
 export type AgentStatus = 'pending_approval' | 'active' | 'paused' | 'pending_deletion';
 const agentFields = {
   id: agents.id, orgId: agents.orgId, teamId: agents.teamId, ownerUserId: agents.ownerUserId,
   name: agents.name, apiKey: agents.apiKey, status: agents.status, approvedAt: agents.approvedAt, approvedBy: agents.approvedBy,
 };
+const agentListFields = { ...agentFields, teamName: teams.name, ownerEmail: users.email };
 
 export const agentsRepository = {
   async create(input: { orgId: string; teamId: string; ownerUserId: string; name: string; apiKey: string }) {
-    const [agent] = await db.insert(agents).values({ ...input, status: 'pending_approval' }).returning(agentFields);
+    const [agent] = await db.insert(agents).values({ ...input, apiKey: hashAgentKey(input.apiKey), status: 'pending_approval' }).returning(agentFields);
     const [approval] = await db.insert(agentApprovals).values({ orgId: input.orgId, agentId: agent.id, requestedBy: input.ownerUserId, status: 'pending' }).returning();
     return { agent, approval };
   },
@@ -29,13 +32,17 @@ export const agentsRepository = {
     return team ?? null;
   },
 
-  async listByOwner(ownerUserId: string) { return db.select(agentFields).from(agents).where(eq(agents.ownerUserId, ownerUserId)); },
-  async listByOrganization(orgId: string) { return db.select(agentFields).from(agents).where(eq(agents.orgId, orgId)); },
+  async listByOwner(ownerUserId: string) {
+    return db.select(agentListFields).from(agents).innerJoin(teams, eq(agents.teamId, teams.id)).leftJoin(users, eq(agents.ownerUserId, users.id)).where(and(eq(agents.ownerUserId, ownerUserId), eq(teams.status, 'active')));
+  },
+  async listByOrganization(orgId: string) {
+    return db.select(agentListFields).from(agents).innerJoin(teams, eq(agents.teamId, teams.id)).leftJoin(users, eq(agents.ownerUserId, users.id)).where(and(eq(agents.orgId, orgId), eq(teams.status, 'active')));
+  },
   async listByTeams(teamIds: string[]) {
-    return teamIds.length ? db.select(agentFields).from(agents).where(inArray(agents.teamId, teamIds)) : [];
+    return teamIds.length ? db.select(agentListFields).from(agents).innerJoin(teams, eq(agents.teamId, teams.id)).leftJoin(users, eq(agents.ownerUserId, users.id)).where(and(inArray(agents.teamId, teamIds), eq(teams.status, 'active'))) : [];
   },
   async listTeamIdsLedBy(userId: string) {
-    const rows = await db.select({ id: teams.id }).from(teams).where(eq(teams.teamLeadId, userId));
+    const rows = await db.select({ id: teams.id }).from(teams).where(and(eq(teams.teamLeadId, userId), eq(teams.status, 'active')));
     return rows.map((team) => team.id);
   },
 
@@ -74,6 +81,17 @@ export const agentsRepository = {
   },
   async findUnconfirmedDeletionReminders(olderThan: Date) {
     return db.select().from(agentDeletions).where(and(eq(agentDeletions.confirmed, false), lt(agentDeletions.requestedAt, olderThan)));
+  },
+  async listPendingDeletionsForRecipient(recipientUserId: string) {
+    return db
+      .select({
+        id: agentDeletions.id,
+        agentId: agentDeletions.agentId,
+        recipientUserId: agentDeletions.recipientUserId,
+        requestedAt: agentDeletions.requestedAt,
+      })
+      .from(agentDeletions)
+      .where(and(eq(agentDeletions.recipientUserId, recipientUserId), eq(agentDeletions.confirmed, false)));
   },
   async approvalFacts(agentId: string) {
     return db.select({ approvedBy: agentApprovals.approvedBy, decidedAt: agentApprovals.decidedAt })

@@ -16,4 +16,11 @@ export const teamsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/teams/:teamId/sub-teams', { preHandler: scopedAccess }, (request) =>
     teamsController.createSubTeam(request as never)
   );
+  app.get('/teams/:teamId/members', { preHandler: scopedAccess }, (request) => teamsController.listMembers(request as never));
+  app.get('/teams/:teamId/available-developers', { preHandler: scopedAccess }, (request) => teamsController.listAvailableDevelopers(request as never));
+  app.post('/teams/:teamId/members', { preHandler: scopedAccess }, (request) => teamsController.addMember(request as never));
+  app.delete('/teams/:teamId/members/:userId', { preHandler: scopedAccess }, (request) => teamsController.removeMember(request as never));
+  app.post('/teams/:teamId/deletion', { preHandler: [authenticate, requireRole(['org_admin']), requireOrgScope()] }, (request) => teamsController.requestDeletion(request as never));
+  app.get('/team-deletions', { preHandler: [authenticate, requireRole(['org_admin', 'finance', 'auditor'])] }, (request) => teamsController.listArchivedDeletions(request));
+  app.get('/team-deletions/:deletionId/export', { preHandler: [authenticate, requireRole(['org_admin', 'finance', 'auditor'])] }, (request, reply) => teamsController.exportArchivedDeletion(request as never, reply));
 };

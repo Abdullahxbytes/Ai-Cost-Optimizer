@@ -4,11 +4,14 @@ import { ValidationError } from '../../utils/errors';
 import { agentsService } from './agents.service';
 
 type AgentParams = { agentId: string };
-const registerSchema = z.object({ name: z.string().trim().min(1), teamId: z.string().uuid() }).strict();
+const registerSchema = z
+  .object({ name: z.string().trim().min(1), teamId: z.string().uuid() })
+  .strict();
 const rejectSchema = z.object({ reason: z.string().trim().min(1).max(1000).optional() }).strict();
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);
-  if (!result.success) throw new ValidationError(result.error.issues[0]?.message ?? 'Invalid agent request');
+  if (!result.success)
+    throw new ValidationError(result.error.issues[0]?.message ?? 'Invalid agent request');
   return result.data;
 }
 
@@ -18,6 +21,8 @@ export const agentsController = {
     return agentsService.register(request.user, body.name, body.teamId);
   },
   list: (request: FastifyRequest) => agentsService.list(request.user),
+  listMyPendingDeletions: (request: FastifyRequest) =>
+    agentsService.listMyPendingDeletions(request.user.id),
   async get(request: FastifyRequest<{ Params: AgentParams }>) {
     await agentsService.assertAgentAccess(request.user, request.params.agentId);
     return agentsService.get(request.params.agentId);
@@ -28,15 +33,19 @@ export const agentsController = {
   },
   async reject(request: FastifyRequest<{ Params: AgentParams }>) {
     await agentsService.assertAgentAccess(request.user, request.params.agentId);
-    return agentsService.reject(request.params.agentId, request.user, parse(rejectSchema, request.body).reason);
+    return agentsService.reject(
+      request.params.agentId,
+      request.user,
+      parse(rejectSchema, request.body).reason
+    );
   },
   async pause(request: FastifyRequest<{ Params: AgentParams }>) {
     await agentsService.assertAgentAccess(request.user, request.params.agentId);
-    return agentsService.changePausedState(request.params.agentId, true);
+    return agentsService.changePausedState(request.params.agentId, true, request.user);
   },
   async resume(request: FastifyRequest<{ Params: AgentParams }>) {
     await agentsService.assertAgentAccess(request.user, request.params.agentId);
-    return agentsService.changePausedState(request.params.agentId, false);
+    return agentsService.changePausedState(request.params.agentId, false, request.user);
   },
   async requestDeletion(request: FastifyRequest<{ Params: AgentParams }>) {
     await agentsService.assertAgentAccess(request.user, request.params.agentId);
@@ -46,7 +55,10 @@ export const agentsController = {
     request: FastifyRequest<{ Params: { deletionId: string } }>,
     reply: FastifyReply
   ) {
-    const { deletion, content } = await agentsService.downloadDeletionExport(request.params.deletionId, request.user.id);
+    const { deletion, content } = await agentsService.downloadDeletionExport(
+      request.params.deletionId,
+      request.user.id
+    );
     return reply
       .type('text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="agent-usage-${deletion.agentId}.csv"`)

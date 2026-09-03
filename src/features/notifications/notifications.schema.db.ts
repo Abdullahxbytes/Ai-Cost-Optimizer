@@ -11,6 +11,8 @@ export const notifications = pgTable('notifications', {
   eventType: text('event_type').notNull(),
   channel: notificationChannelEnum('channel').notNull(),
   message: text('message').notNull(),
+  severity: text('severity').notNull(),
+  priority: text('priority').notNull(),
   read: boolean('read').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

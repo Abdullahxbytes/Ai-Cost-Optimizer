@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  integer,
   uuid,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
@@ -24,11 +25,17 @@ export const users = pgTable(
     email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
     role: roleEnum('role').notNull(),
+    active: boolean('active').default(true).notNull(),
+    tokenVersion: integer('token_version').default(0).notNull(),
     twoFactorSecret: text('two_factor_secret'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => ({ uqUsersOrgEmail: uniqueIndex('idx_users_org_id_email_unique').on(t.orgId, t.email) })
+  (t) => ({
+    uqUsersOrgEmail: uniqueIndex('idx_users_org_id_email_unique').on(t.orgId, t.email),
+    // Until verified email ownership exists, a tenant email may belong to only one organization.
+    uqUsersEmail: uniqueIndex('uq_users_email').on(t.email),
+  })
 );
 
 /** System-level administrators remain separate from tenant users. */
@@ -37,7 +44,9 @@ export const superAdmins = pgTable('super_admins', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   twoFactorSecret: text('two_factor_secret'),
-  createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id),
+  tokenVersion: integer('token_version').default(0).notNull(),
+  // A removed Super Admin must not block hard deletion of their successors.
+  createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
