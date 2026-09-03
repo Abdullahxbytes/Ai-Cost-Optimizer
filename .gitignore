@@ -9,3 +9,16 @@ exports/
 .idea/
 *.swp
 *.swo
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/crash.log
+
+# Deployment keys and compose overrides
+*.pem
+*.key
+*.pub
+docker-compose.override.yml

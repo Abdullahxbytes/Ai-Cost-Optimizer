@@ -1,0 +1,15 @@
+aws_region   = "us-east-1"
+app_name     = "cost-optimizer"
+environment  = "development"
+db_username  = "optimizer"
+db_password  = "GENERATE_WITH_openssl_rand_-base64_32"
+key_pair_name = "your-aws-keypair-name"
+allowed_ssh_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
+
+# Generate each with: openssl rand -base64 48
+jwt_secret                       = "REPLACE_WITH_A_32_PLUS_CHARACTER_SECRET"
+agent_key_hmac_secret            = "REPLACE_WITH_A_32_PLUS_CHARACTER_SECRET"
+provider_key_encryption_secret   = "REPLACE_WITH_A_32_PLUS_CHARACTER_SECRET"
+
+# Optional: used only for server-side Gemini embeddings / semantic cache.
+gemini_api_key = ""
