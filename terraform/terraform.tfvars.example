@@ -1,10 +1,10 @@
 aws_region   = "us-east-1"
-app_name     = "cost-optimizer"
+app_name     = "costflow"
 environment  = "development"
 db_username  = "optimizer"
-db_password  = "GENERATE_WITH_openssl_rand_-base64_32"
-key_pair_name = "your-aws-keypair-name"
-allowed_ssh_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
+db_password   = "REPLACE_WITH_A_STRONG_DATABASE_PASSWORD"
+key_pair_name = "costflow-key"
+allowed_ssh_cidr = "119.160.114.206/32"
 
 # Generate each with: openssl rand -base64 48
 jwt_secret                       = "REPLACE_WITH_A_32_PLUS_CHARACTER_SECRET"

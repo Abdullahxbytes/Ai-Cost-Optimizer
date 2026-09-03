@@ -28,7 +28,7 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-Terraform outputs the Elastic IP and internal RDS/Redis endpoints. EC2 bootstrap clones `main`, writes `/opt/cost-optimizer/.env`, and runs `docker compose -f docker-compose.production.yml up -d --build`.
+Terraform outputs the Elastic IP and internal RDS/Redis endpoints. EC2 bootstrap clones `main`, writes `/opt/costflow/.env`, and runs `docker compose -f docker-compose.production.yml up -d --build`.
 
 ## Verify
 
@@ -43,8 +43,8 @@ ssh -i /path/to/keypair.pem ubuntu@$(terraform output -raw ec2_public_ip)
 On EC2:
 
 ```bash
-sudo tail -f /var/log/cost-optimizer-setup.log
-cd /opt/cost-optimizer
+sudo tail -f /var/log/costflow-setup.log
+cd /opt/costflow
 sudo docker compose -f docker-compose.production.yml ps
 sudo docker compose -f docker-compose.production.yml logs -f app web
 curl http://localhost:3000/health
@@ -56,7 +56,7 @@ The browser application is available at `http://<elastic-ip>/`; API traffic is r
 
 ```bash
 ssh -i /path/to/keypair.pem ubuntu@<elastic-ip>
-cd /opt/cost-optimizer
+cd /opt/costflow
 sudo git pull --ff-only origin main
 sudo docker compose -f docker-compose.production.yml up -d --build
 ```
@@ -65,7 +65,7 @@ sudo docker compose -f docker-compose.production.yml up -d --build
 
 | Symptom | Check |
 | --- | --- |
-| EC2 bootstrap failed | `sudo tail -f /var/log/cloud-init-output.log` and `/var/log/cost-optimizer-setup.log` |
+| EC2 bootstrap failed | `sudo tail -f /var/log/cloud-init-output.log` and `/var/log/costflow-setup.log` |
 | API unhealthy | `sudo docker compose -f docker-compose.production.yml logs app` |
 | RDS connection refused | Wait for RDS `available`; confirm the database SG allows only the app SG on 5432. |
 | Redis connection refused | Wait for ElastiCache `available`; confirm the Redis SG allows only the app SG on 6379. |
@@ -75,7 +75,7 @@ sudo docker compose -f docker-compose.production.yml up -d --build
 Useful AWS checks:
 
 ```bash
-aws ec2 describe-instances --filters "Name=tag:Name,Values=cost-optimizer-*"
+aws ec2 describe-instances --filters "Name=tag:Name,Values=costflow-*"
 aws rds describe-db-instances
 aws elasticache describe-cache-clusters --show-cache-node-info
 ```

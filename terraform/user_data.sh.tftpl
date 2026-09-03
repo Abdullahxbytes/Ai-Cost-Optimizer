@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec > >(tee -a /var/log/cost-optimizer-setup.log) 2>&1
+exec > >(tee -a /var/log/costflow-setup.log) 2>&1
 
-APP_DIR=/opt/cost-optimizer
+APP_DIR=/opt/costflow
 
 apt-get update -y
 apt-get install -y ca-certificates curl git docker.io docker-compose-plugin

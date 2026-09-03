@@ -5,9 +5,9 @@ variable "aws_region" {
 }
 
 variable "app_name" {
-  description = "Short, lowercase application name used in resource names."
+  description = "Short, lowercase CostFlow application name used in resource names."
   type        = string
-  default     = "cost-optimizer"
+  default     = "costflow"
 }
 
 variable "environment" {
