@@ -21,6 +21,7 @@ import { anthropicProvider } from './providers/anthropic.provider';
 import { geminiProvider } from './providers/gemini.provider';
 import { openaiProvider } from './providers/openai.provider';
 import { ProviderAdapter, ProviderName, ProviderResponse } from './providers/provider.types';
+import { autocorrectPromptText } from './prompt-autocorrect.service';
 import { proxyRepository } from './proxy.repository';
 
 type ProviderConfiguration = {
@@ -196,7 +197,8 @@ async function optimizeRequestBody(
   if (!settings?.promptOptimizationEnabled) return { body };
   const originalText = extractPromptText(provider, body);
   if (!originalText) return { body };
-  const optimizedText = optimizePromptText(originalText);
+  const correctedText = await autocorrectPromptText(originalText);
+  const optimizedText = optimizePromptText(correctedText);
   return {
     body: optimizedText === originalText ? body : injectOptimizedText(provider, body, optimizedText),
     originalTokenCount: estimateTokens(originalText),
