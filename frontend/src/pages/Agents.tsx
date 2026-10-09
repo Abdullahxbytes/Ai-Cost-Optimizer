@@ -30,8 +30,21 @@ type CachePolicy = {
   promptVersion: string;
   workloadVersion: string;
 };
-type CachePolicyResponse = { policy: CachePolicy; revision: number; configured: boolean; runtimeStatus: string };
-type CacheDiagnostic = { createdAt: string; outcome: string; reason: string; provider: string; model: string | null; lookupLatencyMs: number; embeddingCostStatus: string };
+type CachePolicyResponse = {
+  policy: CachePolicy;
+  revision: number;
+  configured: boolean;
+  runtimeStatus: string;
+};
+type CacheDiagnostic = {
+  createdAt: string;
+  outcome: string;
+  reason: string;
+  provider: string;
+  model: string | null;
+  lookupLatencyMs: number;
+  embeddingCostStatus: string;
+};
 
 const errorMessage = (error: unknown) =>
   axios.isAxiosError(error) ? (error.response?.data?.error ?? 'Request failed') : 'Request failed';
@@ -78,16 +91,19 @@ export function Agents() {
   });
   const cachePolicy = useQuery({
     queryKey: ['cache-policy', settingsTarget?.id],
-    queryFn: async () => (await api.get<CachePolicyResponse>(`/agents/${settingsTarget!.id}/cache-policy`)).data,
+    queryFn: async () =>
+      (await api.get<CachePolicyResponse>(`/agents/${settingsTarget!.id}/cache-policy`)).data,
     enabled: Boolean(settingsTarget),
   });
   const cacheDiagnostics = useQuery({
     queryKey: ['cache-diagnostics', settingsTarget?.id],
-    queryFn: async () => (await api.get<CacheDiagnostic[]>(`/agents/${settingsTarget!.id}/cache-diagnostics`)).data,
+    queryFn: async () =>
+      (await api.get<CacheDiagnostic[]>(`/agents/${settingsTarget!.id}/cache-diagnostics`)).data,
     enabled: Boolean(settingsTarget),
   });
   const saveCachePolicy = useMutation({
-    mutationFn: () => api.put(`/agents/${settingsTarget!.id}/cache-policy`, cachePolicyDraft ?? cachePolicy.data!.policy),
+    mutationFn: () =>
+      api.put(`/agents/${settingsTarget!.id}/cache-policy`, cachePolicyDraft ?? cachePolicy.data!.policy),
     onSuccess: () => {
       setCachePolicyDraft(null);
       void queryClient.invalidateQueries({ queryKey: ['cache-policy', settingsTarget?.id] });
@@ -98,9 +114,10 @@ export function Agents() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['cache-policy', settingsTarget?.id] }),
   });
   const saveOptimization = useMutation({
-    mutationFn: () => api.patch(`/agents/${settingsTarget!.id}/optimization-settings`, {
-      promptOptimizationEnabled: currentSettings?.promptOptimizationEnabled,
-    }),
+    mutationFn: () =>
+      api.patch(`/agents/${settingsTarget!.id}/optimization-settings`, {
+        promptOptimizationEnabled: currentSettings?.promptOptimizationEnabled,
+      }),
     onSuccess: () => {
       setSettingsTarget(null);
       setSettingsDraft(null);
@@ -381,72 +398,226 @@ export function Agents() {
             </div>
             <div className="mt-6 border-t border-slate-700 pt-5">
               <h3 className="font-semibold">Response cache policy</h3>
-              <p className="mt-1 text-sm text-slate-400">Caching is off until a complete policy is saved. Policy changes invalidate older entries.</p>
-              {cachePolicy.data?.runtimeStatus !== 'active' && <p role="status" className="mt-2 text-sm">Cache runtime is paused. These controls prepare the policy; requests still go to the provider.</p>}
-              {cachePolicy.isError && <p role="alert" className="mt-2 text-sm">{errorMessage(cachePolicy.error)}</p>}
+              <p className="mt-1 text-sm text-slate-400">
+                Caching is off until a complete policy is saved. Policy changes invalidate older entries.
+              </p>
+              {cachePolicy.data?.runtimeStatus !== 'active' && (
+                <p role="status" className="mt-2 text-sm">
+                  Cache runtime is paused. These controls prepare the policy; requests still go to the
+                  provider.
+                </p>
+              )}
+              {cachePolicy.isError && (
+                <p role="alert" className="mt-2 text-sm">
+                  {errorMessage(cachePolicy.error)}
+                </p>
+              )}
               {cachePolicy.isLoading || !currentCachePolicy ? (
                 <p className="mt-3 text-sm">Loading cache policy…</p>
               ) : (
                 <div className="mt-4 space-y-3 text-sm">
-                  <label className="block">Mode
-                    <select value={currentCachePolicy.mode} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, mode: e.target.value as CachePolicy['mode'] })} className="mt-1 w-full rounded-lg border px-3 py-2">
-                      <option value="off">Off</option><option value="exact">Exact match</option><option value="exact_semantic">Exact, then semantic</option>
+                  <label className="block">
+                    Mode
+                    <select
+                      value={currentCachePolicy.mode}
+                      onChange={(e) =>
+                        setCachePolicyDraft({
+                          ...currentCachePolicy,
+                          mode: e.target.value as CachePolicy['mode'],
+                        })
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="off">Off</option>
+                      <option value="exact">Exact match</option>
+                      <option value="exact_semantic">Exact, then semantic</option>
                     </select>
                   </label>
-                  {(['workload', 'knowledgeVersion', 'promptVersion', 'workloadVersion'] as const).map((field) => (
-                    <label key={field} className="block">{field === 'workload' ? 'Workload name' : field === 'knowledgeVersion' ? 'Knowledge version' : field === 'promptVersion' ? 'Prompt version' : 'Workload version'}
-                      <input value={currentCachePolicy[field]} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, [field]: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2" />
-                    </label>
-                  ))}
-                  <label className="block">Data freshness
-                    <select value={currentCachePolicy.freshness} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, freshness: e.target.value as CachePolicy['freshness'] })} className="mt-1 w-full rounded-lg border px-3 py-2">
-                      <option value="live">Live or changing — bypass cache</option><option value="versioned">Versioned knowledge</option>
+                  {(['workload', 'knowledgeVersion', 'promptVersion', 'workloadVersion'] as const).map(
+                    (field) => (
+                      <label key={field} className="block">
+                        {field === 'workload'
+                          ? 'Workload name'
+                          : field === 'knowledgeVersion'
+                            ? 'Knowledge version'
+                            : field === 'promptVersion'
+                              ? 'Prompt version'
+                              : 'Workload version'}
+                        <input
+                          value={currentCachePolicy[field]}
+                          onChange={(e) =>
+                            setCachePolicyDraft({ ...currentCachePolicy, [field]: e.target.value })
+                          }
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+                    ),
+                  )}
+                  <label className="block">
+                    Data freshness
+                    <select
+                      value={currentCachePolicy.freshness}
+                      onChange={(e) =>
+                        setCachePolicyDraft({
+                          ...currentCachePolicy,
+                          freshness: e.target.value as CachePolicy['freshness'],
+                        })
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="live">Live or changing — bypass cache</option>
+                      <option value="versioned">Versioned knowledge</option>
                     </select>
                   </label>
-                  <label className="block">Data risk
-                    <select value={currentCachePolicy.risk} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, risk: e.target.value as CachePolicy['risk'] })} className="mt-1 w-full rounded-lg border px-3 py-2">
-                      <option value="standard">Standard</option><option value="sensitive">Sensitive — bypass cache</option><option value="side_effecting">Changes data — bypass cache</option>
+                  <label className="block">
+                    Data risk
+                    <select
+                      value={currentCachePolicy.risk}
+                      onChange={(e) =>
+                        setCachePolicyDraft({
+                          ...currentCachePolicy,
+                          risk: e.target.value as CachePolicy['risk'],
+                        })
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="sensitive">Sensitive — bypass cache</option>
+                      <option value="side_effecting">Changes data — bypass cache</option>
                     </select>
                   </label>
-                  <label className="block">Answer scope
-                    <select value={currentCachePolicy.scope} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, scope: e.target.value as CachePolicy['scope'] })} className="mt-1 w-full rounded-lg border px-3 py-2">
-                      <option value="end_user">Per verified end user</option><option value="shared">Shared across end users</option>
+                  <label className="block">
+                    Answer scope
+                    <select
+                      value={currentCachePolicy.scope}
+                      onChange={(e) =>
+                        setCachePolicyDraft({
+                          ...currentCachePolicy,
+                          scope: e.target.value as CachePolicy['scope'],
+                        })
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="end_user">Per verified end user</option>
+                      <option value="shared">Shared across end users</option>
                     </select>
                   </label>
-                  <label className="flex items-center justify-between gap-3">I permit storage of approved responses
-                    <input type="checkbox" checked={currentCachePolicy.storageAllowed} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, storageAllowed: e.target.checked })} />
+                  <label className="flex items-center justify-between gap-3">
+                    I permit storage of approved responses
+                    <input
+                      type="checkbox"
+                      checked={currentCachePolicy.storageAllowed}
+                      onChange={(e) =>
+                        setCachePolicyDraft({ ...currentCachePolicy, storageAllowed: e.target.checked })
+                      }
+                    />
                   </label>
-                  <label className="flex items-center justify-between gap-3">Allow exact matches for conversations
-                    <input type="checkbox" checked={currentCachePolicy.allowConversationExact} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, allowConversationExact: e.target.checked })} />
+                  <label className="flex items-center justify-between gap-3">
+                    Allow exact matches for conversations
+                    <input
+                      type="checkbox"
+                      checked={currentCachePolicy.allowConversationExact}
+                      onChange={(e) =>
+                        setCachePolicyDraft({
+                          ...currentCachePolicy,
+                          allowConversationExact: e.target.checked,
+                        })
+                      }
+                    />
                   </label>
-                  {currentCachePolicy.mode === 'exact_semantic' && <>
-                    <label className="flex items-center justify-between gap-3">I approve semantic reuse for this workload
-                      <input type="checkbox" checked={currentCachePolicy.semanticApproved} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, semanticApproved: e.target.checked })} />
-                    </label>
-                    <label className="flex items-center justify-between gap-3">For non-Gemini calls, send questions to Gemini for embeddings
-                      <input type="checkbox" checked={currentCachePolicy.embeddingProvider === 'gemini'} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, embeddingProvider: e.target.checked ? 'gemini' : undefined })} />
-                    </label>
-                    <label className="block">Similarity threshold
-                      <input type="number" min="0.8" max="1" step="0.01" value={currentCachePolicy.similarityThreshold} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, similarityThreshold: Number(e.target.value) })} className="mt-1 w-full rounded-lg border px-3 py-2" />
-                    </label>
-                  </>}
-                  <label className="block">Maximum lifetime (seconds, up to 86400)
-                    <input type="number" min="1" max="86400" step="1" value={currentCachePolicy.ttlSeconds} onChange={(e) => setCachePolicyDraft({ ...currentCachePolicy, ttlSeconds: Number(e.target.value) })} className="mt-1 w-full rounded-lg border px-3 py-2" />
+                  {currentCachePolicy.mode === 'exact_semantic' && (
+                    <>
+                      <label className="flex items-center justify-between gap-3">
+                        I approve semantic reuse for this workload
+                        <input
+                          type="checkbox"
+                          checked={currentCachePolicy.semanticApproved}
+                          onChange={(e) =>
+                            setCachePolicyDraft({ ...currentCachePolicy, semanticApproved: e.target.checked })
+                          }
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-3">
+                        For non-Gemini calls, send questions to Gemini for embeddings
+                        <input
+                          type="checkbox"
+                          checked={currentCachePolicy.embeddingProvider === 'gemini'}
+                          onChange={(e) =>
+                            setCachePolicyDraft({
+                              ...currentCachePolicy,
+                              embeddingProvider: e.target.checked ? 'gemini' : undefined,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="block">
+                        Similarity threshold
+                        <input
+                          type="number"
+                          min="0.8"
+                          max="1"
+                          step="0.01"
+                          value={currentCachePolicy.similarityThreshold}
+                          onChange={(e) =>
+                            setCachePolicyDraft({
+                              ...currentCachePolicy,
+                              similarityThreshold: Number(e.target.value),
+                            })
+                          }
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+                    </>
+                  )}
+                  <label className="block">
+                    Maximum lifetime (seconds, up to 86400)
+                    <input
+                      type="number"
+                      min="1"
+                      max="86400"
+                      step="1"
+                      value={currentCachePolicy.ttlSeconds}
+                      onChange={(e) =>
+                        setCachePolicyDraft({ ...currentCachePolicy, ttlSeconds: Number(e.target.value) })
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
+                    />
                   </label>
                   <div className="flex flex-wrap gap-3">
-                    <button disabled={!cachePolicyDraft || saveCachePolicy.isPending} onClick={() => saveCachePolicy.mutate()} className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50">Save cache policy</button>
-                    <button disabled={purgeCache.isPending} onClick={() => { if (window.confirm('Purge all cached responses for this agent?')) purgeCache.mutate(); }} className="rounded-lg border px-4 py-2">Purge this agent’s cache</button>
+                    <button
+                      disabled={!cachePolicyDraft || saveCachePolicy.isPending}
+                      onClick={() => saveCachePolicy.mutate()}
+                      className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                    >
+                      Save cache policy
+                    </button>
+                    <button
+                      disabled={purgeCache.isPending}
+                      onClick={() => {
+                        if (window.confirm('Purge all cached responses for this agent?')) purgeCache.mutate();
+                      }}
+                      className="rounded-lg border px-4 py-2"
+                    >
+                      Purge this agent’s cache
+                    </button>
                   </div>
                   {saveCachePolicy.isError && <p role="alert">{errorMessage(saveCachePolicy.error)}</p>}
                   {purgeCache.isSuccess && <p role="status">This agent’s cache was purged.</p>}
                   {purgeCache.isError && <p role="alert">{errorMessage(purgeCache.error)}</p>}
                   <div className="border-t pt-3">
                     <h4 className="font-semibold">Recent cache decisions</h4>
-                    {cacheDiagnostics.data?.length ? <ul className="mt-2 space-y-2">
-                      {cacheDiagnostics.data.slice(0, 5).map((row, index) => <li key={`${row.createdAt}-${index}`} className="text-xs">
-                        {row.outcome} · {row.reason} · {row.lookupLatencyMs} ms · {row.provider}{row.model ? `/${row.model}` : ''}
-                      </li>)}
-                    </ul> : <p className="mt-1 text-xs">No cache decisions recorded yet.</p>}
+                    {cacheDiagnostics.data?.length ? (
+                      <ul className="mt-2 space-y-2">
+                        {cacheDiagnostics.data.slice(0, 5).map((row, index) => (
+                          <li key={`${row.createdAt}-${index}`} className="text-xs">
+                            {row.outcome} · {row.reason} · {row.lookupLatencyMs} ms · {row.provider}
+                            {row.model ? `/${row.model}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-xs">No cache decisions recorded yet.</p>
+                    )}
                   </div>
                 </div>
               )}

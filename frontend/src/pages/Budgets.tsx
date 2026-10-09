@@ -203,7 +203,10 @@ export function Budgets({ requestOnly = false }: { requestOnly?: boolean }) {
       <section>
         <h2 className="text-lg font-semibold">Current budgets</h2>
         {editingBudget && (
-          <form onSubmit={saveEdit} className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <form
+            onSubmit={saveEdit}
+            className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
+          >
             <label className="text-sm">
               New limit (USD)
               <input
@@ -216,8 +219,19 @@ export function Budgets({ requestOnly = false }: { requestOnly?: boolean }) {
                 className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
               />
             </label>
-            <button disabled={update.isPending} className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50">Save changes</button>
-            <button type="button" onClick={() => setEditingBudget(null)} className="rounded-lg border border-slate-600 px-4 py-2">Cancel</button>
+            <button
+              disabled={update.isPending}
+              className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+            >
+              Save changes
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingBudget(null)}
+              className="rounded-lg border border-slate-600 px-4 py-2"
+            >
+              Cancel
+            </button>
             {update.isError && <p className="text-sm text-red-300">{errorMessage(update.error)}</p>}
           </form>
         )}

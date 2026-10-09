@@ -21,11 +21,16 @@ export const DEFAULT_OPTIMIZATION_SETTINGS: OptimizationSettings = {
 export const optimizationRepository = {
   async getCacheTransformationVersion(agentId: string): Promise<string> {
     const [row] = await db
-      .select({ promptOptimizationEnabled: optimizationRules.promptOptimizationEnabled, updatedAt: optimizationRules.updatedAt })
+      .select({
+        promptOptimizationEnabled: optimizationRules.promptOptimizationEnabled,
+        updatedAt: optimizationRules.updatedAt,
+      })
       .from(optimizationRules)
       .where(eq(optimizationRules.agentId, agentId))
       .limit(1);
-    return row ? `${row.promptOptimizationEnabled ? 'on' : 'off'}:${row.updatedAt.toISOString()}` : 'off:default';
+    return row
+      ? `${row.promptOptimizationEnabled ? 'on' : 'off'}:${row.updatedAt.toISOString()}`
+      : 'off:default';
   },
   async getSettings(agentId: string): Promise<OptimizationSettings | null> {
     const [settings] = await db
@@ -59,7 +64,8 @@ export const optimizationRepository = {
         orgId,
         agentId,
         promptOptimizationEnabled:
-          update.promptOptimizationEnabled ?? DEFAULT_OPTIMIZATION_SETTINGS.promptOptimizationEnabled,
+          update.promptOptimizationEnabled ??
+          DEFAULT_OPTIMIZATION_SETTINGS.promptOptimizationEnabled,
         semanticCacheEnabled:
           update.semanticCacheEnabled ?? DEFAULT_OPTIMIZATION_SETTINGS.semanticCacheEnabled,
         cacheSimilarityThreshold: String(

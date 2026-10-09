@@ -18,11 +18,13 @@ type Pending = { user_id: string; org_id: string | null; purpose: '2fa_pending' 
 const loadOtpLib = (): Promise<{
   generateSecret: () => string;
   generateURI: (input: { issuer: string; label: string; secret: string }) => string;
-  verify: (input: { token: string; secret: string; epochTolerance?: number; afterTimeStep?: number }) => Promise<
-    { valid: false } | { valid: true; timeStep: number }
-  >;
-}> =>
-  new Function('modulePath', 'return import(modulePath)')('otplib');
+  verify: (input: {
+    token: string;
+    secret: string;
+    epochTolerance?: number;
+    afterTimeStep?: number;
+  }) => Promise<{ valid: false } | { valid: true; timeStep: number }>;
+}> => new Function('modulePath', 'return import(modulePath)')('otplib');
 type Principal = {
   id: string;
   orgId: string | null;
@@ -73,20 +75,46 @@ export const userService = {
     const accountKey = `login-account:${privateRateLimitIdentity(normalizedEmail)}`;
     const ipKey = `login-ip:${privateRateLimitIdentity(ip)}`;
     await Promise.all([
-      assertFailureLimit({ key: accountKey, limit: 5, scope: 'account', message: 'Account login attempts exceeded' }),
-      assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'IP login attempts exceeded' }),
+      assertFailureLimit({
+        key: accountKey,
+        limit: 5,
+        scope: 'account',
+        message: 'Account login attempts exceeded',
+      }),
+      assertFailureLimit({
+        key: ipKey,
+        limit: 30,
+        scope: 'ip',
+        message: 'IP login attempts exceeded',
+      }),
     ]);
     const rejectCredentials = async (): Promise<never> => {
       await Promise.all([
-        recordFailure({ key: accountKey, limit: 5, ttlSeconds: 15 * 60, scope: 'account', message: 'Account login attempts exceeded' }),
-        recordFailure({ key: ipKey, limit: 30, ttlSeconds: 15 * 60, scope: 'ip', message: 'IP login attempts exceeded' }),
+        recordFailure({
+          key: accountKey,
+          limit: 5,
+          ttlSeconds: 15 * 60,
+          scope: 'account',
+          message: 'Account login attempts exceeded',
+        }),
+        recordFailure({
+          key: ipKey,
+          limit: 30,
+          ttlSeconds: 15 * 60,
+          scope: 'ip',
+          message: 'IP login attempts exceeded',
+        }),
       ]);
       throw new AuthError('Invalid credentials');
     };
     const rows = await userRepository.findUsersByEmail(normalizedEmail);
     if (rows.length === 1) {
       const u = rows[0];
-      if (!u.active || u.orgStatus !== 'active' || !(await bcrypt.compare(b.password, u.passwordHash)))
+      if (
+        !u.active ||
+        u.orgStatus !== 'active' ||
+        !(await bcrypt.compare(b.password, u.passwordHash))
+      )
         return rejectCredentials();
       await clearFailureLimit(accountKey);
       return {
@@ -100,8 +128,7 @@ export const userService = {
     }
     if (rows.length > 1) return rejectCredentials();
     const [a] = await userRepository.findSuperAdminByEmail(normalizedEmail);
-    if (!a || !(await bcrypt.compare(b.password, a.passwordHash)))
-      return rejectCredentials();
+    if (!a || !(await bcrypt.compare(b.password, a.passwordHash))) return rejectCredentials();
     await clearFailureLimit(accountKey);
     return {
       pendingToken: jwt.sign(
@@ -134,8 +161,18 @@ export const userService = {
     const accountKey = `2fa-account:${p.user_id}`;
     const ipKey = `2fa-ip:${privateRateLimitIdentity(ip)}`;
     await Promise.all([
-      assertFailureLimit({ key: accountKey, limit: 5, scope: 'account', message: 'Account authentication attempts exceeded' }),
-      assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'IP authentication attempts exceeded' }),
+      assertFailureLimit({
+        key: accountKey,
+        limit: 5,
+        scope: 'account',
+        message: 'Account authentication attempts exceeded',
+      }),
+      assertFailureLimit({
+        key: ipKey,
+        limit: 30,
+        scope: 'ip',
+        message: 'IP authentication attempts exceeded',
+      }),
     ]);
     const raw = await userRepository.findPendingPrincipal(p.user_id, p.org_id);
     const u: Principal | undefined =
@@ -157,8 +194,20 @@ export const userService = {
     });
     if (!result.valid) {
       await Promise.all([
-        recordFailure({ key: accountKey, limit: 5, ttlSeconds: 10 * 60, scope: 'account', message: 'Account authentication attempts exceeded' }),
-        recordFailure({ key: ipKey, limit: 30, ttlSeconds: 10 * 60, scope: 'ip', message: 'IP authentication attempts exceeded' }),
+        recordFailure({
+          key: accountKey,
+          limit: 5,
+          ttlSeconds: 10 * 60,
+          scope: 'account',
+          message: 'Account authentication attempts exceeded',
+        }),
+        recordFailure({
+          key: ipKey,
+          limit: 30,
+          ttlSeconds: 10 * 60,
+          scope: 'ip',
+          message: 'IP authentication attempts exceeded',
+        }),
       ]);
       throw new AuthError('Invalid code');
     }
@@ -170,29 +219,58 @@ export const userService = {
     );
     if (!accepted) throw new AuthError('Code already used');
     await clearFailureLimit(accountKey);
-    const token = jwt.sign({ user_id: u.id, org_id: u.orgId, role: u.role, token_version: u.tokenVersion }, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
-    });
+    const token = jwt.sign(
+      { user_id: u.id, org_id: u.orgId, role: u.role, token_version: u.tokenVersion },
+      env.JWT_SECRET,
+      {
+        expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+      }
+    );
     return { token, user: { id: u.id, email: u.email, role: u.role, orgId: u.orgId } };
   },
-  async createOrganizationUser(user: AuthenticatedUser, orgId: string, input: { email: string; role: ManagedRole; initialPassword: string }) {
+  async createOrganizationUser(
+    user: AuthenticatedUser,
+    orgId: string,
+    input: { email: string; role: ManagedRole; initialPassword: string }
+  ) {
     if (user.orgId !== orgId) throw new ForbiddenError('Organization access denied');
     const email = input.email.toLowerCase();
     const existing = await userRepository.findUserByEmail(email);
-    if (existing && existing.orgId !== orgId) throw new ValidationError('An account with this email already exists');
+    if (existing && existing.orgId !== orgId)
+      throw new ValidationError('An account with this email already exists');
     if (existing?.active) throw new ValidationError('An account with this email already exists');
     const passwordHash = await bcrypt.hash(input.initialPassword, 12);
     const created = existing
-      ? await userRepository.reactivateOrganizationUser({ id: existing.id, orgId, role: input.role, passwordHash })
-      : await userRepository.createOrganizationUser({ orgId, email, role: input.role, passwordHash });
+      ? await userRepository.reactivateOrganizationUser({
+          id: existing.id,
+          orgId,
+          role: input.role,
+          passwordHash,
+        })
+      : await userRepository.createOrganizationUser({
+          orgId,
+          email,
+          role: input.role,
+          passwordHash,
+        });
     if (!created) throw new NotFoundError('Removed user could not be reactivated');
     return created;
   },
-  async updateOrganizationUserRole(user: AuthenticatedUser, orgId: string, userId: string, role: ManagedRole) {
+  async updateOrganizationUserRole(
+    user: AuthenticatedUser,
+    orgId: string,
+    userId: string,
+    role: ManagedRole
+  ) {
     if (user.orgId !== orgId) throw new ForbiddenError('Organization access denied');
     const target = await userRepository.findOrganizationUser(userId, orgId);
     if (!target) throw new NotFoundError('User not found');
-    if (target.active && target.role === 'org_admin' && role !== 'org_admin' && await userRepository.countActiveOrgAdmins(orgId) <= 1)
+    if (
+      target.active &&
+      target.role === 'org_admin' &&
+      role !== 'org_admin' &&
+      (await userRepository.countActiveOrgAdmins(orgId)) <= 1
+    )
       throw new ValidationError('Cannot remove the last Org Admin from an organization');
     return userRepository.updateOrganizationUserRole(userId, orgId, role);
   },
@@ -201,13 +279,19 @@ export const userService = {
     if (user.id === userId) throw new ValidationError('Org Admins cannot remove themselves');
     const target = await userRepository.findOrganizationUser(userId, orgId);
     if (!target || !target.active) throw new NotFoundError('User not found');
-    if (target.role === 'org_admin' && await userRepository.countActiveOrgAdmins(orgId) <= 1)
+    if (target.role === 'org_admin' && (await userRepository.countActiveOrgAdmins(orgId)) <= 1)
       throw new ValidationError('Cannot remove the last Org Admin from an organization');
     return userRepository.deactivateOrganizationUser(userId, orgId);
   },
-  async changePassword(user: AuthenticatedUser, input: { currentPassword: string; newPassword: string }) {
-    const target = user.orgId ? await userRepository.findPasswordForActiveUser(user.id, user.orgId) : await userRepository.findPasswordForSuperAdmin(user.id);
-    if (!target || !(await bcrypt.compare(input.currentPassword, target.passwordHash))) throw new AuthError('Invalid current password');
+  async changePassword(
+    user: AuthenticatedUser,
+    input: { currentPassword: string; newPassword: string }
+  ) {
+    const target = user.orgId
+      ? await userRepository.findPasswordForActiveUser(user.id, user.orgId)
+      : await userRepository.findPasswordForSuperAdmin(user.id);
+    if (!target || !(await bcrypt.compare(input.currentPassword, target.passwordHash)))
+      throw new AuthError('Invalid current password');
     const passwordHash = await bcrypt.hash(input.newPassword, 12);
     if (user.orgId) await userRepository.updatePassword(user.id, user.orgId, passwordHash);
     else await userRepository.updateSuperAdminPassword(user.id, passwordHash);

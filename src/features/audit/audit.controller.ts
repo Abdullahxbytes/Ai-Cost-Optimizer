@@ -4,16 +4,24 @@ import { ValidationError } from '../../utils/errors';
 import { AuditFilters } from './audit.repository';
 import { auditService } from './audit.service';
 
-const filtersSchema = z.object({
-  orgId: z.string().uuid().optional(), from: z.coerce.date().optional(), to: z.coerce.date().optional(),
-  eventType: z.string().trim().min(1).optional(), actor: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(50), offset: z.coerce.number().int().min(0).default(0),
-}).strict();
+const filtersSchema = z
+  .object({
+    orgId: z.string().uuid().optional(),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    eventType: z.string().trim().min(1).optional(),
+    actor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
 function parse(value: unknown) {
   const result = filtersSchema.safeParse(value);
-  if (!result.success) throw new ValidationError(result.error.issues[0]?.message ?? 'Invalid audit filters');
+  if (!result.success)
+    throw new ValidationError(result.error.issues[0]?.message ?? 'Invalid audit filters');
   const to = result.data.to ?? new Date();
-  if (result.data.from && result.data.from > to) throw new ValidationError('from must be before to');
+  if (result.data.from && result.data.from > to)
+    throw new ValidationError('from must be before to');
   return { orgId: result.data.orgId, filters: { ...result.data, to } as AuditFilters };
 }
 

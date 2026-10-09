@@ -8,7 +8,10 @@ async function migrate() {
   const rows = await db.select({ id: agents.id, apiKey: agents.apiKey }).from(agents);
   const plaintextRows = rows.filter((row) => !isAgentKeyHash(row.apiKey));
   for (const row of plaintextRows) {
-    await db.update(agents).set({ apiKey: hashAgentKey(row.apiKey), updatedAt: new Date() }).where(eq(agents.id, row.id));
+    await db
+      .update(agents)
+      .set({ apiKey: hashAgentKey(row.apiKey), updatedAt: new Date() })
+      .where(eq(agents.id, row.id));
   }
   const verification = await Promise.all(
     plaintextRows.map(async (row) => {
@@ -20,7 +23,14 @@ async function migrate() {
       return response.status !== 401;
     })
   );
-  console.log(JSON.stringify({ migrated: plaintextRows.length, alreadyHashed: rows.length - plaintextRows.length, authenticatedAfterMigration: verification.filter(Boolean).length, authenticationFailures: verification.filter((result) => !result).length }));
+  console.log(
+    JSON.stringify({
+      migrated: plaintextRows.length,
+      alreadyHashed: rows.length - plaintextRows.length,
+      authenticatedAfterMigration: verification.filter(Boolean).length,
+      authenticationFailures: verification.filter((result) => !result).length,
+    })
+  );
 }
 
 migrate()

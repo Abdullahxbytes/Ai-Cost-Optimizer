@@ -24,13 +24,15 @@ export const userManagementRoutes: FastifyPluginAsync = async (app) => {
     userController.listOrganizationUsers(request.user, (request.params as { orgId: string }).orgId)
   );
   app.post('/orgs/:orgId/users', { preHandler: orgAdmin }, async (request, reply) =>
-    reply.status(201).send(
-      await userController.createOrganizationUser(
-        request.user,
-        (request.params as { orgId: string }).orgId,
-        request.body
+    reply
+      .status(201)
+      .send(
+        await userController.createOrganizationUser(
+          request.user,
+          (request.params as { orgId: string }).orgId,
+          request.body
+        )
       )
-    )
   );
   app.patch('/orgs/:orgId/users/:userId', { preHandler: orgAdmin }, async (request) =>
     userController.updateOrganizationUserRole(

@@ -32,7 +32,10 @@ export async function authenticate(request: FastifyRequest) {
       throw new AuthError('Invalid or expired session token');
     }
     if (payload.org_id !== null) {
-      const current = await userRepository.findActiveTenantPrincipal(payload.user_id, payload.org_id);
+      const current = await userRepository.findActiveTenantPrincipal(
+        payload.user_id,
+        payload.org_id
+      );
       if (!current) throw new AuthError('Invalid or expired session token');
       if (current.orgStatus !== 'active') throw new ForbiddenError('Organization is blocked');
       if (current.tokenVersion !== payload.token_version)

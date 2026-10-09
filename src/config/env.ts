@@ -37,12 +37,10 @@ export const env = {
   ...parsed,
   // Backward-compatible fallback keeps existing installations readable. New
   // deployments should configure an independent TOTP encryption secret.
-  TOTP_ENCRYPTION_SECRET:
-    parsed.TOTP_ENCRYPTION_SECRET ?? parsed.PROVIDER_KEY_ENCRYPTION_SECRET,
+  TOTP_ENCRYPTION_SECRET: parsed.TOTP_ENCRYPTION_SECRET ?? parsed.PROVIDER_KEY_ENCRYPTION_SECRET,
 };
 
-const configuredCorsOrigins = env.CORS_ORIGINS
-  ?.split(',')
+const configuredCorsOrigins = env.CORS_ORIGINS?.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 

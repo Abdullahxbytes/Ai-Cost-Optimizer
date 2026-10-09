@@ -14,7 +14,6 @@ stage establishes production accuracy or measured net savings.
   for owner-approved V2 policies; legacy rows remain ineligible.
 - The shared Agents settings page disables legacy cache controls and still
   allows prompt-optimization changes.
-- Do not run `verifyByokSemanticCacheHttp.ts`: it targets retired behavior.
 
 ## Policy API
 

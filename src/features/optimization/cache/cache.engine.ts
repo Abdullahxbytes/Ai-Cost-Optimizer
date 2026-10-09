@@ -64,18 +64,28 @@ async function embed(question: string, orgId: string) {
     { params: { key }, timeout: EMBEDDING_TIMEOUT_MS }
   );
   const values: unknown = result.data?.embedding?.values;
-  if (!Array.isArray(values) || values.length !== EMBEDDING_DIMENSIONS ||
-      values.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+  if (
+    !Array.isArray(values) ||
+    values.length !== EMBEDDING_DIMENSIONS ||
+    values.some((value) => typeof value !== 'number' || !Number.isFinite(value))
+  ) {
     throw new Error('Invalid embedding response');
   }
   const tokens: unknown = result.data?.usageMetadata?.promptTokenCount;
-  const inputTokens = typeof tokens === 'number' && Number.isInteger(tokens) && tokens >= 0 ? tokens : undefined;
-  const rate = inputTokens === undefined ? null : await pricingRepository.getRate(orgId, 'gemini', env.EMBEDDING_MODEL);
+  const inputTokens =
+    typeof tokens === 'number' && Number.isInteger(tokens) && tokens >= 0 ? tokens : undefined;
+  const rate =
+    inputTokens === undefined
+      ? null
+      : await pricingRepository.getRate(orgId, 'gemini', env.EMBEDDING_MODEL);
   return {
     values: values as number[],
     latencyMs: Date.now() - startedAt,
     inputTokens,
-    costUsd: rate && inputTokens !== undefined ? ((inputTokens / 1000) * rate.inputPricePer1k).toFixed(6) : undefined,
+    costUsd:
+      rate && inputTokens !== undefined
+        ? ((inputTokens / 1000) * rate.inputPricePer1k).toFixed(6)
+        : undefined,
   };
 }
 
@@ -99,10 +109,19 @@ export const cacheEngine = {
     const startedAt = Date.now();
     const { agent, provider, path, body, options } = input;
     const diagnostic: CacheDiagnostic = {
-      scope: scope(agent), taskId: options.taskId, provider, model: null,
-      outcome: 'bypass', reason: 'policy_off', lookupLatencyMs: 0,
+      scope: scope(agent),
+      taskId: options.taskId,
+      provider,
+      model: null,
+      outcome: 'bypass',
+      reason: 'policy_off',
+      lookupLatencyMs: 0,
     };
-    const finish = (outcome: CacheResult['outcome'], reason: string, extra: Partial<CacheResult> = {}): CacheResult => {
+    const finish = (
+      outcome: CacheResult['outcome'],
+      reason: string,
+      extra: Partial<CacheResult> = {}
+    ): CacheResult => {
       diagnostic.outcome = outcome;
       diagnostic.reason = reason;
       diagnostic.lookupLatencyMs = Date.now() - startedAt;
@@ -110,15 +129,24 @@ export const cacheEngine = {
     };
     try {
       const envelope = await cachePolicyRepository.get(agent.orgId, agent.id);
-      if (!envelope.configured || envelope.policy.mode === 'off') return finish('bypass', 'policy_off');
+      if (!envelope.configured || envelope.policy.mode === 'off')
+        return finish('bypass', 'policy_off');
       const user = verifyCacheUserContext(options.userContextToken, agent);
       const version = await transformationVersion(agent.id);
       const embeddingModelVersion = `${env.EMBEDDING_MODEL}:${EMBEDDING_DIMENSIONS}:semantic-similarity-v1`;
       const decision = evaluateCacheRequest({
-        provider, path, body,
-        policy: { schemaVersion: envelope.schemaVersion, revision: envelope.revision, policy: envelope.policy },
+        provider,
+        path,
+        body,
+        policy: {
+          schemaVersion: envelope.schemaVersion,
+          revision: envelope.revision,
+          policy: envelope.policy,
+        },
         context: {
-          orgId: agent.orgId, agentId: agent.id, environment: options.environment,
+          orgId: agent.orgId,
+          agentId: agent.id,
+          environment: options.environment,
           providerCredentialVersion: input.credentialVersion,
           providerApiVersion: path.startsWith('/v1beta/') ? 'v1beta' : 'v1',
           modelRevision: envelope.policy.workloadVersion,
@@ -130,16 +158,25 @@ export const cacheEngine = {
       if (decision.outcome === 'cache_bypassed') return finish('bypass', decision.reason);
       diagnostic.model = decision.model;
       const exact = await cacheRepository.findExact(scope(agent), decision);
-      if (exact && await cacheRepository.stillCurrent(scope(agent), decision) &&
-          version === await transformationVersion(agent.id)) {
+      if (
+        exact &&
+        (await cacheRepository.stillCurrent(scope(agent), decision)) &&
+        version === (await transformationVersion(agent.id))
+      ) {
         return finish('exact_hit', 'exact_context_match', {
-          response: { status: 200, data: exact.response, headers: { contentType: 'application/json' } },
+          response: {
+            status: 200,
+            data: exact.response,
+            headers: { contentType: 'application/json' },
+          },
         });
       }
 
       let embedding: number[] | undefined;
-      if (decision.outcome === 'semantic_cache_allowed' &&
-          (provider === 'gemini' || envelope.policy.embeddingProvider === 'gemini')) {
+      if (
+        decision.outcome === 'semantic_cache_allowed' &&
+        (provider === 'gemini' || envelope.policy.embeddingProvider === 'gemini')
+      ) {
         try {
           const result = await embed(decision.question!, agent.orgId);
           embedding = result.values;
@@ -147,17 +184,32 @@ export const cacheEngine = {
           diagnostic.embeddingInputTokens = result.inputTokens;
           diagnostic.embeddingCostUsd = result.costUsd;
           diagnostic.embeddingCostStatus = result.costUsd ? 'estimated' : 'unknown';
-          const semantic = await cacheRepository.findSemantic(scope(agent), decision, embeddingModelVersion, embedding);
-          if (semantic && await cacheRepository.stillCurrent(scope(agent), decision) &&
-              version === await transformationVersion(agent.id)) {
+          const semantic = await cacheRepository.findSemantic(
+            scope(agent),
+            decision,
+            embeddingModelVersion,
+            embedding
+          );
+          if (
+            semantic &&
+            (await cacheRepository.stillCurrent(scope(agent), decision)) &&
+            version === (await transformationVersion(agent.id))
+          ) {
             return finish('semantic_hit', 'approved_partition_similarity', {
-              response: { status: 200, data: semantic.entry.response, headers: { contentType: 'application/json' } },
+              response: {
+                status: 200,
+                data: semantic.entry.response,
+                headers: { contentType: 'application/json' },
+              },
             });
           }
         } catch {
           // Embedding is optional: exact cache remains usable and provider forwarding continues.
           diagnostic.embeddingCostStatus = 'unknown';
-          return finish('miss', 'embedding_unavailable', { decision, transformationVersion: version });
+          return finish('miss', 'embedding_unavailable', {
+            decision,
+            transformationVersion: version,
+          });
         }
       }
 
@@ -173,10 +225,17 @@ export const cacheEngine = {
           while (Date.now() < deadline) {
             await new Promise((resolve) => setTimeout(resolve, 50));
             const filled = await cacheRepository.findExact(scope(agent), decision);
-            if (filled && await cacheRepository.stillCurrent(scope(agent), decision) &&
-                version === await transformationVersion(agent.id)) {
+            if (
+              filled &&
+              (await cacheRepository.stillCurrent(scope(agent), decision)) &&
+              version === (await transformationVersion(agent.id))
+            ) {
               return finish('exact_hit', 'concurrent_fill', {
-                response: { status: 200, data: filled.response, headers: { contentType: 'application/json' } },
+                response: {
+                  status: 200,
+                  data: filled.response,
+                  headers: { contentType: 'application/json' },
+                },
               });
             }
           }
@@ -184,7 +243,13 @@ export const cacheEngine = {
       } catch {
         // Redis coordination is best effort; the provider remains available.
       }
-      return finish('miss', 'no_matching_entry', { decision, embedding, embeddingModelVersion, transformationVersion: version, fillLock });
+      return finish('miss', 'no_matching_entry', {
+        decision,
+        embedding,
+        embeddingModelVersion,
+        transformationVersion: version,
+        fillLock,
+      });
     } catch {
       return finish('bypass', 'cache_unavailable');
     }
@@ -199,26 +264,43 @@ export const cacheEngine = {
     const { result, agent, provider, response } = input;
     try {
       const decision = result.decision;
-      if (!decision || !canStoreCacheResponse(decision, provider, response.status, response.data)) return;
+      if (!decision || !canStoreCacheResponse(decision, provider, response.status, response.data))
+        return;
       if (decision.outcome === 'cache_bypassed') return;
-      if (result.transformationVersion !== await transformationVersion(agent.id)) return;
+      if (result.transformationVersion !== (await transformationVersion(agent.id))) return;
       await cacheRepository.store({
-        scope: scope(agent), decision, provider, model: decision.model,
-        response: response.data, embedding: result.embedding,
+        scope: scope(agent),
+        decision,
+        provider,
+        model: decision.model,
+        response: response.data,
+        embedding: result.embedding,
         embeddingModelVersion: result.embedding ? result.embeddingModelVersion : undefined,
       });
     } catch {
       // A cache write failure must never change the provider response.
     } finally {
-      try { await releaseFillLock(result.fillLock); } catch { /* short lock TTL is a fallback */ }
+      try {
+        await releaseFillLock(result.fillLock);
+      } catch {
+        /* short lock TTL is a fallback */
+      }
     }
   },
 
   async abort(result?: CacheResult): Promise<void> {
-    try { await releaseFillLock(result?.fillLock); } catch { /* expires automatically */ }
+    try {
+      await releaseFillLock(result?.fillLock);
+    } catch {
+      /* expires automatically */
+    }
   },
 
   async record(result: CacheResult): Promise<void> {
-    try { await cacheDiagnostics.record(result.diagnostic); } catch { /* diagnostic failure is nonfatal */ }
+    try {
+      await cacheDiagnostics.record(result.diagnostic);
+    } catch {
+      /* diagnostic failure is nonfatal */
+    }
   },
 };

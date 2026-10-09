@@ -56,7 +56,8 @@ function isSingleEditOrTransposition(source: string, candidate: string): boolean
     return source[first] === candidate[second] && source[second] === candidate[first];
   }
 
-  const [shorter, longer] = source.length < candidate.length ? [source, candidate] : [candidate, source];
+  const [shorter, longer] =
+    source.length < candidate.length ? [source, candidate] : [candidate, source];
   let shortIndex = 0;
   let longIndex = 0;
   let skipped = false;
@@ -75,7 +76,8 @@ function isSingleEditOrTransposition(source: string, candidate: string): boolean
 
 function preserveCase(source: string, replacement: string): string {
   if (source === source.toUpperCase()) return replacement.toUpperCase();
-  if (source[0] === source[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  if (source[0] === source[0].toUpperCase())
+    return replacement[0].toUpperCase() + replacement.slice(1);
   return replacement;
 }
 
@@ -94,9 +96,13 @@ export async function autocorrectPromptText(text: string): Promise<string> {
     const knownCorrection = COMMON_TYPO_CORRECTIONS[normalized];
     if (knownCorrection) return preserveCase(word, knownCorrection);
 
-    const corrections = [...new Set(spellchecker
-      .suggest(normalized)
-      .filter((candidate) => isSingleEditOrTransposition(normalized, candidate.toLowerCase())))];
+    const corrections = [
+      ...new Set(
+        spellchecker
+          .suggest(normalized)
+          .filter((candidate) => isSingleEditOrTransposition(normalized, candidate.toLowerCase()))
+      ),
+    ];
     return corrections.length === 1 ? preserveCase(word, corrections[0]) : word;
   });
 }

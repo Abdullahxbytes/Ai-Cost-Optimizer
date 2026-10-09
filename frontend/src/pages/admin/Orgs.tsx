@@ -35,7 +35,13 @@ export function Orgs() {
               <tr key={org.id} className="border-t border-slate-800">
                 <td className="py-3">{org.name}</td>
                 <td>{org.timezone}</td>
-                <td><span className={`status-pill ${org.status === 'active' ? 'status-active' : 'status-error'}`}>{org.status}</span></td>
+                <td>
+                  <span
+                    className={`status-pill ${org.status === 'active' ? 'status-active' : 'status-error'}`}
+                  >
+                    {org.status}
+                  </span>
+                </td>
                 <td>
                   <button
                     onClick={() => setPending(org)}

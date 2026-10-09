@@ -18,15 +18,23 @@ export const superAdminsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/super-admins', { preHandler: superAdminOnly }, () => superAdminsRepository.list());
   app.get('/orgs', { preHandler: superAdminOnly }, () => orgsRepository.list());
   app.post('/orgs/:orgId/block', { preHandler: superAdminOnly }, async (request) => {
-    const org = await orgsRepository.setStatus((request.params as { orgId: string }).orgId, 'blocked');
+    const org = await orgsRepository.setStatus(
+      (request.params as { orgId: string }).orgId,
+      'blocked'
+    );
     if (!org) throw new NotFoundError('Organization not found');
     return org;
   });
   app.post('/orgs/:orgId/unblock', { preHandler: superAdminOnly }, async (request) => {
-    const org = await orgsRepository.setStatus((request.params as { orgId: string }).orgId, 'active');
+    const org = await orgsRepository.setStatus(
+      (request.params as { orgId: string }).orgId,
+      'active'
+    );
     if (!org) throw new NotFoundError('Organization not found');
     return org;
   });
   app.get('/admin/health', { preHandler: superAdminOnly }, () => adminHealthService.system());
-  app.get('/admin/health/endpoints', { preHandler: superAdminOnly }, () => adminHealthService.endpoints());
+  app.get('/admin/health/endpoints', { preHandler: superAdminOnly }, () =>
+    adminHealthService.endpoints()
+  );
 };

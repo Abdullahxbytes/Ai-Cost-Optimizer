@@ -1,0 +1,114 @@
+Using both design audits, here is the complete improvement backlog for CostFlow. Most of it does not need images or new assets from you.
+1. Design system foundation
+- Define one official color system and remove accidental color variations.
+- Standardize surface, border, text, muted text, action, success, warning, and error colors.
+- Use warm-tinted shadows consistently; avoid generic gray shadows.
+- Define a radius scale: panels, cards, buttons, inputs, tags.
+- Define spacing and grid tokens so every page aligns consistently.
+- Apply tabular numerals to currency, percentages, token counts, and chart values.
+- Standardize decimal display rules across costs, budgets, analytics, and pricing.
+Decision needed from you:
+- Keep the current warm cream theme, or move fully to neutral gray?
+  My recommendation: keep warm cream. #EDEFF0 should not become the primary card color unless we also make the whole app neutral/cool.
+2. Typography
+- Confirm one product font family for the app.
+- Strengthen page headings while reducing the visual noise of small labels.
+- Replace excessive uppercase labels with quieter sentence case or refined small caps.
+- Improve line-height and text width in forms, cards, empty states, and landing-page sections.
+- Use consistent weights: regular body text, medium labels, semibold headings.
+Decision needed from you:
+- Choose a font direction: Geist, Satoshi, Cabinet Grotesk, or Outfit.
+  My recommendation: Geist for the dashboard and product UI because it is clear and excellent for data.
+3. Dashboard improvements
+- Improve Cost trend chart readability:
+  - fewer visible date labels;
+  - subtler gridlines;
+  - tooltips for exact date/cost;
+  - consistent currency precision;
+  - clearer zero-data state.
+- Refine summary cards:
+  - tighter numeric alignment;
+  - clearer hierarchy between label and metric;
+  - optional small trend comparison where meaningful.
+- Improve Budget overview:
+  - preserve the vertical budget list;
+  - soften or remove the heavy internal scrollbar;
+  - standardize budget row spacing;
+  - show state through progress-bar color only when meaningful;
+  - keep the budget percentage consistent with the top summary metric.
+- Make agent tables easier to scan with stronger column hierarchy and cleaner row hover states.
+- Ensure every role dashboard uses the same visual components but only sees authorized data.
+No assets needed.
+4. Tables, forms, and settings
+- Standardize table headers, row height, hover state, selected state, and empty state.
+- Make destructive actions consistently red and require clear confirmation.
+- Use inline validation for forms instead of vague general errors.
+- Add visible keyboard focus states to every interactive element.
+- Improve long settings forms with grouped sections and persistent save feedback.
+- Replace generic loading spinners with layout-shaped skeleton loaders.
+- Ensure modals fit cleanly on smaller laptop screens and mobile devices.
+No assets needed.
+5. Navigation and responsive behavior
+- Keep the floating sidebar—it is a strong part of the current identity.
+- Improve sidebar text contrast and hover/pressed feedback.
+- Add a compact/collapsed sidebar experience for narrower laptop widths.
+- Verify every dashboard role at desktop, tablet, and mobile widths.
+- Keep current-page navigation states clear across all roles.
+- Add a clear return path from login, sign-up, error, and empty-state screens.
+Decision needed from you:
+- Should the sidebar collapse to icons on medium screens, or become a slide-out menu on mobile?
+  My recommendation: icon-only collapse on tablet/laptop; slide-out menu on mobile.
+6. Interaction polish
+- Add 200–300ms transitions to buttons, cards, table rows, tabs, and progress bars.
+- Add subtle pressed feedback to buttons.
+- Add small entrance transitions for dashboard panels.
+- Respect reduced-motion preferences.
+- Avoid heavy GSAP effects inside dashboards; operational screens should feel fast and stable.
+No assets needed.
+7. Landing page
+- Make the hero more visually distinctive while keeping the heading to two or three lines.
+- Keep the existing hero.png as the central brand visual.
+- Replace plain feature cards with product-specific visual stories:
+  - request routing through the proxy;
+  - semantic cache hit;
+  - budget enforcement;
+  - analytics and savings.
+- Use an intentional bento/stack layout with no empty grid space.
+- Add restrained scroll motion: reveal, scale/fade media, or stacked cards.
+- Improve the final call-to-action and footer, including Privacy and Terms links.
+- Remove generic labels and vague AI marketing language.
+Assets useful, but optional:
+- 2–4 product screenshots, ideally of proxy analytics, budgets, cache savings, and alerts.
+- A preferred illustration direction if you do not want screenshots.
+- Final marketing copy or a rough description of CostFlow’s target customer.
+I would prefer using real CostFlow screens over stock images. It makes the landing page more credible.
+8. Empty, error, loading, and accessibility states
+- Design friendly empty states for no agents, no budgets, no data, and no alerts.
+- Make provider/proxy errors actionable and specific.
+- Add skeleton loading states.
+- Ensure accessible contrast, focus rings, semantic headings, image alt text, and a skip-to-content link.
+- Add a branded 404 page.
+- Add legal links before public deployment.
+No images required; a small custom illustration set is optional.
+9. Branding details
+- Confirm favicon, browser title, social preview image, and meta description.
+- Use one consistent icon family and stroke width.
+- Avoid default-looking icons where custom CostFlow symbols would communicate better.
+- Add restrained texture or grain only to marketing backgrounds—not data screens.
+Assets needed eventually:
+- Square favicon.
+- Open Graph/social share image.
+- Optional small brand pattern or illustration set.
+What I need from you before implementation
+Only these decisions are important:
+1. Keep the warm cream theme, or switch fully to a neutral/cool theme?
+2. Approve Geist as the primary UI font, or choose Satoshi, Cabinet Grotesk, or Outfit.
+3. Choose responsive sidebar behavior: icon-collapse plus mobile drawer is my recommendation.
+4. Decide whether landing-page visuals should use real product screenshots or custom illustrations.
+5. Provide a favicon and social sharing image later, if available.
+6. Tell me whether you want the next work phase to prioritize:
+   - dashboard polish;
+   - landing page;
+   - responsive/mobile;
+   - states and accessibility.
+Everything else can be implemented with the current logo, hero.png, and product UI.

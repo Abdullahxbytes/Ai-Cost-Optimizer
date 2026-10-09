@@ -5,9 +5,13 @@ import { client } from '../../src/config/database';
 async function truncateTestDatabase() {
   const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
   try {
-    const tables = await sql<{ table_name: string }[]>`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`;
+    const tables = await sql<
+      { table_name: string }[]
+    >`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`;
     if (tables.length) {
-      const names = tables.map(({ table_name }) => `"${table_name.replace(/"/g, '""')}"`).join(', ');
+      const names = tables
+        .map(({ table_name }) => `"${table_name.replace(/"/g, '""')}"`)
+        .join(', ');
       await sql.unsafe(`TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE`);
     }
   } finally {

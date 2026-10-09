@@ -31,7 +31,10 @@ export function Health() {
           ['Active organizations', health.data?.activeOrgs],
           ['Active agents', health.data?.activeAgents],
         ].map(([label, value]) => (
-          <div key={String(label)} className="analytics-stat-card rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <div
+            key={String(label)}
+            className="analytics-stat-card rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
             <p className="analytics-stat-label text-sm text-slate-400">{label}</p>
             <p
               className={`analytics-stat-value mt-2 text-xl ${value === 'healthy' ? 'text-emerald-300' : value === 'unhealthy' ? 'text-red-300' : ''}`}
@@ -63,7 +66,9 @@ export function Health() {
             ))}
           </tbody>
         </table>
-        {endpoints.isError && <p className="mt-3 text-sm text-red-300">Endpoint health could not be loaded.</p>}
+        {endpoints.isError && (
+          <p className="mt-3 text-sm text-red-300">Endpoint health could not be loaded.</p>
+        )}
       </section>
     </div>
   );

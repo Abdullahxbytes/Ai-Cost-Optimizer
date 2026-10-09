@@ -67,7 +67,9 @@ export const optimizationService = {
       totalCost: summary.totalCost,
       cacheHits: summary.cacheHits,
       cacheHitRate:
-        summary.totalCalls === 0 ? 0 : Number(((summary.cacheHits / summary.totalCalls) * 100).toFixed(2)),
+        summary.totalCalls === 0
+          ? 0
+          : Number(((summary.cacheHits / summary.totalCalls) * 100).toFixed(2)),
       costSavedFromCache: summary.costSavedFromCache,
       totalTokensSaved: summary.totalTokensSaved,
       estimatedCostSavedFromOptimization: Number(estimatedCostSavedFromOptimization.toFixed(8)),

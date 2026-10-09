@@ -23,10 +23,21 @@ declare module 'fastify' {
 
 export async function agentAuth(request: FastifyRequest) {
   const ipKey = `agent-auth-ip:${privateRateLimitIdentity(request.ip)}`;
-  await assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'Agent authentication attempts exceeded' });
+  await assertFailureLimit({
+    key: ipKey,
+    limit: 30,
+    scope: 'ip',
+    message: 'Agent authentication attempts exceeded',
+  });
   const key = request.headers['x-agent-key'];
   const rejectKey = async (): Promise<never> => {
-    await recordFailure({ key: ipKey, limit: 30, ttlSeconds: 60, scope: 'ip', message: 'Agent authentication attempts exceeded' });
+    await recordFailure({
+      key: ipKey,
+      limit: 30,
+      ttlSeconds: 60,
+      scope: 'ip',
+      message: 'Agent authentication attempts exceeded',
+    });
     throw new AuthError('Invalid agent key');
   };
   if (!key || Array.isArray(key)) return rejectKey();

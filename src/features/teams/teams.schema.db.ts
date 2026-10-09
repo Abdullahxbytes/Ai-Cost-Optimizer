@@ -25,17 +25,27 @@ export const teams = pgTable(
   })
 );
 
-export const teamMembers = pgTable('team_members', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ uniqueMember: uniqueIndex('team_members_team_user_unique').on(table.teamId, table.userId) }));
+export const teamMembers = pgTable(
+  'team_members',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    teamId: uuid('team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueMember: uniqueIndex('team_members_team_user_unique').on(table.teamId, table.userId),
+  })
+);
 
 export const teamDeletions = pgTable('team_deletions', {
   id: uuid('id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
-  teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  teamId: uuid('team_id')
+    .notNull()
+    .references(() => teams.id, { onDelete: 'cascade' }),
   mode: teamDeletionModeEnum('mode').notNull(),
   requestedBy: uuid('requested_by').notNull(),
   requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),

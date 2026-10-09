@@ -25,31 +25,5 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
-    environment:
-      DATABASE_URL: postgresql://user:password@postgres:5432/ai_cost_optimizer
-      REDIS_URL: redis://redis:6379
-      NODE_ENV: development
-      PORT: 3000
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      AGENT_KEY_HMAC_SECRET: ${AGENT_KEY_HMAC_SECRET:?Set AGENT_KEY_HMAC_SECRET in .env}
-      PROVIDER_KEY_ENCRYPTION_SECRET: ${PROVIDER_KEY_ENCRYPTION_SECRET:?Set PROVIDER_KEY_ENCRYPTION_SECRET in .env}
-      PLATFORM_URL: http://localhost:3000
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-    ports:
-      - '3000:3000'
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
 volumes:
   postgres_data:

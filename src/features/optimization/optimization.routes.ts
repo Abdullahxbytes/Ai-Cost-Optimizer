@@ -36,11 +36,7 @@ export const optimizationRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/teams/:teamId/savings-summary',
     {
-      preHandler: [
-        authenticate,
-        requireRole(['org_admin', 'team_lead']),
-        requireOrgScope(),
-      ],
+      preHandler: [authenticate, requireRole(['org_admin', 'team_lead']), requireOrgScope()],
     },
     (request) => optimizationController.getTeamSavings(request as never)
   );

@@ -10,10 +10,20 @@ function getScope(alert: AlertRecord): { scope: BudgetScope; scopeId: string } {
   return { scope: 'org', scopeId: alert.orgId };
 }
 
-export type AlertScanResult = { scanned: number; triggered: number; skippedWithoutBudget: number; deduplicated: number };
+export type AlertScanResult = {
+  scanned: number;
+  triggered: number;
+  skippedWithoutBudget: number;
+  deduplicated: number;
+};
 
 export async function alertScanner(): Promise<AlertScanResult> {
-  const result: AlertScanResult = { scanned: 0, triggered: 0, skippedWithoutBudget: 0, deduplicated: 0 };
+  const result: AlertScanResult = {
+    scanned: 0,
+    triggered: 0,
+    skippedWithoutBudget: 0,
+    deduplicated: 0,
+  };
   for (const alert of await alertsRepository.listActiveBudgetAlerts()) {
     result.scanned += 1;
     const { scope, scopeId } = getScope(alert);

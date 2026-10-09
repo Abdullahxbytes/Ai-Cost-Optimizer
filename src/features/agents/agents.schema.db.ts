@@ -47,9 +47,9 @@ export const agents = pgTable(
 export const agentApprovals = pgTable('agent_approvals', {
   id: uuid('id').defaultRandom().primaryKey(),
   orgId: uuid('org_id').notNull(),
-    agentId: uuid('agent_id')
-      .notNull()
-      .references(() => agents.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
   requestedBy: uuid('requested_by').notNull(),
   approvedBy: uuid('approved_by'),
   status: requestStatusEnum('status').default('pending').notNull(),

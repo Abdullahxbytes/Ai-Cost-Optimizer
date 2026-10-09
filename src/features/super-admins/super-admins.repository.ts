@@ -2,7 +2,12 @@ import { count, eq } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { superAdmins } from '../user/user.schema.db';
 
-const publicFields = { id: superAdmins.id, email: superAdmins.email, createdBy: superAdmins.createdBy, createdAt: superAdmins.createdAt };
+const publicFields = {
+  id: superAdmins.id,
+  email: superAdmins.email,
+  createdBy: superAdmins.createdBy,
+  createdAt: superAdmins.createdAt,
+};
 
 export const superAdminsRepository = {
   list: () => db.select(publicFields).from(superAdmins).orderBy(superAdmins.createdAt),
@@ -20,7 +25,10 @@ export const superAdminsRepository = {
       // ON DELETE SET NULL behavior. This keeps removals safe for databases
       // created before that constraint was introduced.
       await tx.update(superAdmins).set({ createdBy: null }).where(eq(superAdmins.createdBy, id));
-      const [admin] = await tx.delete(superAdmins).where(eq(superAdmins.id, id)).returning(publicFields);
+      const [admin] = await tx
+        .delete(superAdmins)
+        .where(eq(superAdmins.id, id))
+        .returning(publicFields);
       return admin ?? null;
     });
   },

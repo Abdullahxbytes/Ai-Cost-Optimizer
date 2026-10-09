@@ -19,7 +19,11 @@ async function verify(provider: ProviderKeyProvider, key: string): Promise<void>
       });
     }
   } catch {
-    throw new AppError(400, 'This API key could not be verified with the provider', 'PROVIDER_KEY_INVALID');
+    throw new AppError(
+      400,
+      'This API key could not be verified with the provider',
+      'PROVIDER_KEY_INVALID'
+    );
   }
 }
 
@@ -29,12 +33,18 @@ export const providerKeysService = {
   async save(orgId: string, actor: string, provider: ProviderKeyProvider, apiKey: string) {
     await verify(provider, apiKey);
     const result = await providerKeysRepository.upsert({
-      orgId, provider, encryptedKey: encryptProviderKey(apiKey),
-      keyLastFour: apiKey.slice(-4), addedBy: actor,
+      orgId,
+      provider,
+      encryptedKey: encryptProviderKey(apiKey),
+      keyLastFour: apiKey.slice(-4),
+      addedBy: actor,
     });
     await providerKeysRepository.audit(
-      orgId, actor, result.updated ? 'provider_key_updated' : 'provider_key_added',
-      provider, result.row.keyLastFour
+      orgId,
+      actor,
+      result.updated ? 'provider_key_updated' : 'provider_key_added',
+      provider,
+      result.row.keyLastFour
     );
     return result.row;
   },

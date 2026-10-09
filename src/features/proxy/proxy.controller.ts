@@ -44,13 +44,25 @@ export const proxyController = {
     let cacheHit = false;
     let cacheResult;
     try {
-      ({ response, latencyMs, originalTokenCount, optimizedTokenCount, budgetReservation, cacheHit, cacheResult } = await proxyService.forward(
+      ({
+        response,
+        latencyMs,
+        originalTokenCount,
+        optimizedTokenCount,
+        budgetReservation,
+        cacheHit,
+        cacheResult,
+      } = await proxyService.forward(
         request.params.provider,
         path,
         request.body,
         request.agent,
         isTest,
-        { environment, taskId, userContextToken: getHeaderValue(request, 'x-costflow-user-context') }
+        {
+          environment,
+          taskId,
+          userContextToken: getHeaderValue(request, 'x-costflow-user-context'),
+        }
       ));
     } catch (error) {
       if (error instanceof ProviderError) {

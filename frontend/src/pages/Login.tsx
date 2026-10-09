@@ -75,66 +75,77 @@ export function Login() {
   return (
     <main className="auth-page">
       <div className="auth-form-side">
-      <section className="auth-card">
-        <img className="auth-brand" src="/images/costflow_logo-Photoroom.png" alt="Cost Flow" />
-        {step === 'credentials' && (
-          <>
-            <h1 className="mt-3 text-3xl font-semibold">Sign in</h1>
-            <p className="auth-muted mt-2 text-sm">Welcome back. Please enter your details.</p>
-            {signupSuccess && <p role="status" className="mt-4 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-300">Account created — log in to continue. You’ll set up two-factor authentication next.</p>}
-            <form onSubmit={submitCredentials} className="mt-7 space-y-4">
-              <Field label="Email" type="email" value={email} onChange={setEmail} />
-              <PasswordField
-                value={password}
-                onChange={setPassword}
-                show={showPassword}
-                onToggle={() => setShowPassword((visible) => !visible)}
-              />
-              {error && <Error text={error} />}
-              <Submit busy={submitting} label="Continue" />
-            </form>
-            <p className="mt-5 text-center text-sm text-slate-400">Don&apos;t have an account? <Link to="/signup" className="font-medium text-cyan-300 hover:text-cyan-200">Sign up</Link></p>
-          </>
-        )}
-        {step === 'setup' && (
-          <>
-            <h1 className="mt-3 text-3xl font-semibold">Set up two-factor authentication</h1>
-            <p className="mt-2 text-sm text-slate-400">Scan this one time QR code, then enter its six-digit code.</p>
-            {setup && (
-              <>
-                <img
-                  src={setup.qrCodeDataUrl}
-                  alt="Two-factor setup QR code"
-                  className="mx-auto mt-5 h-44 w-44 rounded-lg bg-white p-2"
+        <section className="auth-card">
+          <img className="auth-brand" src="/images/costflow_logo-Photoroom.png" alt="Cost Flow" />
+          {step === 'credentials' && (
+            <>
+              <h1 className="mt-3 text-3xl font-semibold">Sign in</h1>
+              <p className="auth-muted mt-2 text-sm">Welcome back. Please enter your details.</p>
+              {signupSuccess && (
+                <p role="status" className="mt-4 rounded-lg bg-emerald-950/60 p-3 text-sm text-emerald-300">
+                  Account created — log in to continue. You’ll set up two-factor authentication next.
+                </p>
+              )}
+              <form onSubmit={submitCredentials} className="mt-7 space-y-4">
+                <Field label="Email" type="email" value={email} onChange={setEmail} />
+                <PasswordField
+                  value={password}
+                  onChange={setPassword}
+                  show={showPassword}
+                  onToggle={() => setShowPassword((visible) => !visible)}
                 />
-                <p className="mt-3 break-all text-xs text-slate-400">Manual key: {setup.manualEntryKey}</p>
-              </>
-            )}
-            <CodeForm
-              code={code}
-              setCode={setCode}
-              onSubmit={submitCode}
-              error={error}
-              submitting={submitting}
-            />
-          </>
-        )}
-        {step === 'totp' && (
-          <>
-            <h1 className="mt-3 text-3xl font-semibold">Two-factor authentication</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              Enter the six-digit code from your authenticator app.
-            </p>
-            <CodeForm
-              code={code}
-              setCode={setCode}
-              onSubmit={submitCode}
-              error={error}
-              submitting={submitting}
-            />
-          </>
-        )}
-      </section>
+                {error && <Error text={error} />}
+                <Submit busy={submitting} label="Continue" />
+              </form>
+              <p className="mt-5 text-center text-sm text-slate-400">
+                Don&apos;t have an account?{' '}
+                <Link to="/signup" className="font-medium text-cyan-300 hover:text-cyan-200">
+                  Sign up
+                </Link>
+              </p>
+            </>
+          )}
+          {step === 'setup' && (
+            <>
+              <h1 className="mt-3 text-3xl font-semibold">Set up two-factor authentication</h1>
+              <p className="mt-2 text-sm text-slate-400">
+                Scan this one time QR code, then enter its six-digit code.
+              </p>
+              {setup && (
+                <>
+                  <img
+                    src={setup.qrCodeDataUrl}
+                    alt="Two-factor setup QR code"
+                    className="mx-auto mt-5 h-44 w-44 rounded-lg bg-white p-2"
+                  />
+                  <p className="mt-3 break-all text-xs text-slate-400">Manual key: {setup.manualEntryKey}</p>
+                </>
+              )}
+              <CodeForm
+                code={code}
+                setCode={setCode}
+                onSubmit={submitCode}
+                error={error}
+                submitting={submitting}
+              />
+            </>
+          )}
+          {step === 'totp' && (
+            <>
+              <h1 className="mt-3 text-3xl font-semibold">Two-factor authentication</h1>
+              <p className="mt-2 text-sm text-slate-400">
+                Enter the six-digit code from your authenticator app.
+              </p>
+              <CodeForm
+                code={code}
+                setCode={setCode}
+                onSubmit={submitCode}
+                error={error}
+                submitting={submitting}
+              />
+            </>
+          )}
+        </section>
       </div>
     </main>
   );
@@ -272,7 +283,9 @@ function CodeForm({
           {digits.map((digit, index) => (
             <input
               key={index}
-              ref={(element) => { inputs.current[index] = element; }}
+              ref={(element) => {
+                inputs.current[index] = element;
+              }}
               value={digit}
               onChange={(event) => setDigit(index, event.target.value)}
               onKeyDown={(event) => handleKeyDown(index, event)}

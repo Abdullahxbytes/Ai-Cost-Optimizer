@@ -17,7 +17,9 @@ describe('layered dashboard rate limits', () => {
       });
       expect(response.statusCode).toBe(429);
       expect(response.json()).toMatchObject({ code: 'RATE_LIMIT', scope: 'user' });
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 
   it('enforces the organization dashboard ceiling across users', async () => {
@@ -33,7 +35,9 @@ describe('layered dashboard rate limits', () => {
       });
       expect(response.statusCode).toBe(429);
       expect(response.json()).toMatchObject({ code: 'RATE_LIMIT', scope: 'organization' });
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 });
 
@@ -44,10 +48,19 @@ describe('unauthenticated and global safeguards', () => {
     const key = `ratelimit:failure:agent-auth-ip:${privateRateLimitIdentity(ip)}`;
     try {
       await redis.set(key, '30', { EX: 60 });
-      const response = await app.inject({ method: 'POST', url: '/proxy/gemini/test', remoteAddress: ip, headers: { 'x-agent-key': 'invalid' }, payload: {} });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/proxy/gemini/test',
+        remoteAddress: ip,
+        headers: { 'x-agent-key': 'invalid' },
+        payload: {},
+      });
       expect(response.statusCode).toBe(429);
       expect(response.json()).toMatchObject({ code: 'RATE_LIMIT', scope: 'ip' });
-    } finally { await redis.del(key); await app.close(); }
+    } finally {
+      await redis.del(key);
+      await app.close();
+    }
   });
 
   it('uses a high global circuit breaker independent of client IP', async () => {
@@ -56,9 +69,17 @@ describe('unauthenticated and global safeguards', () => {
     const key = `ratelimit:global-api:${window}`;
     try {
       await redis.set(key, '100000');
-      const response = await app.inject({ method: 'POST', url: '/auth/login', remoteAddress: '10.60.0.1', payload: { email: 'nobody@example.test', password: 'incorrect' } });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        remoteAddress: '10.60.0.1',
+        payload: { email: 'nobody@example.test', password: 'incorrect' },
+      });
       expect(response.statusCode).toBe(429);
       expect(response.json()).toMatchObject({ code: 'RATE_LIMIT', scope: 'global' });
-    } finally { await redis.del(key); await app.close(); }
+    } finally {
+      await redis.del(key);
+      await app.close();
+    }
   });
 });

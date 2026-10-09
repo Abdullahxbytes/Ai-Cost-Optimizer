@@ -64,20 +64,18 @@ export const cachePolicyRepository = {
         })
         .returning();
       if (!saved) throw new ValidationError('Cache policy scope mismatch');
-      await tx
-        .insert(auditLog)
-        .values({
-          orgId,
-          actorUserId,
-          eventType: 'cache_policy_updated',
-          targetType: 'agent',
-          targetId: agentId,
-          metadata: {
-            mode: policy.mode,
-            revision: saved.revision,
-            schemaVersion: CACHE_SCHEMA_VERSION,
-          },
-        });
+      await tx.insert(auditLog).values({
+        orgId,
+        actorUserId,
+        eventType: 'cache_policy_updated',
+        targetType: 'agent',
+        targetId: agentId,
+        metadata: {
+          mode: policy.mode,
+          revision: saved.revision,
+          schemaVersion: CACHE_SCHEMA_VERSION,
+        },
+      });
       return saved;
     });
     return {

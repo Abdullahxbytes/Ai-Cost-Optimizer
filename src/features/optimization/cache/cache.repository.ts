@@ -172,20 +172,18 @@ export const cacheRepository = {
         .delete(semanticCache)
         .where(and(eq(semanticCache.orgId, scope.orgId), eq(semanticCache.agentId, scope.agentId)))
         .returning({ id: semanticCache.id });
-      await tx
-        .insert(auditLog)
-        .values({
-          orgId: scope.orgId,
-          actorUserId,
-          eventType: 'response_cache_purged',
-          targetType: 'agent',
-          targetId: scope.agentId,
-          metadata: {
-            schemaVersion: CACHE_SCHEMA_VERSION,
-            currentCount: rows.length,
-            legacyCount: legacy.length,
-          },
-        });
+      await tx.insert(auditLog).values({
+        orgId: scope.orgId,
+        actorUserId,
+        eventType: 'response_cache_purged',
+        targetType: 'agent',
+        targetId: scope.agentId,
+        metadata: {
+          schemaVersion: CACHE_SCHEMA_VERSION,
+          currentCount: rows.length,
+          legacyCount: legacy.length,
+        },
+      });
       return rows.length + legacy.length;
     });
   },

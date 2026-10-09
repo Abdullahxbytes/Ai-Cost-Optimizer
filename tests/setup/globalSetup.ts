@@ -13,7 +13,8 @@ export default async function globalSetup() {
   try {
     await admin.unsafe(`CREATE DATABASE "${databaseName.replace(/"/g, '""')}"`);
   } catch (error) {
-    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === '42P04')) throw error;
+    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === '42P04'))
+      throw error;
   } finally {
     await admin.end();
   }
@@ -23,9 +24,13 @@ export default async function globalSetup() {
   } finally {
     await testDatabase.end();
   }
-  execFileSync(process.execPath, [path.resolve(__dirname, '../../node_modules/drizzle-kit/bin.cjs'), 'push', '--force'], {
-    cwd: path.resolve(__dirname, '../..'),
-    env: { ...process.env, DATABASE_URL: testUrl },
-    stdio: 'inherit',
-  });
+  execFileSync(
+    process.execPath,
+    [path.resolve(__dirname, '../../node_modules/drizzle-kit/bin.cjs'), 'push', '--force'],
+    {
+      cwd: path.resolve(__dirname, '../..'),
+      env: { ...process.env, DATABASE_URL: testUrl },
+      stdio: 'inherit',
+    }
+  );
 }

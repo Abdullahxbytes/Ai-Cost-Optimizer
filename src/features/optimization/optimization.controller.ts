@@ -27,10 +27,12 @@ const dateRangeQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });
-const cacheContextBody = z.object({
-  subject: z.string().min(1).max(256),
-  authorizationVersion: z.string().min(1).max(256),
-}).strict();
+const cacheContextBody = z
+  .object({
+    subject: z.string().min(1).max(256),
+    authorizationVersion: z.string().min(1).max(256),
+  })
+  .strict();
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -80,7 +82,8 @@ export const optimizationController = {
   async purgeCache(request: FastifyRequest<{ Params: AgentParams }>) {
     await requireAgentAccess(request);
     const deleted = await cacheRepository.purgeAgent(
-      { orgId: request.user.orgId!, agentId: request.params.agentId }, request.user.id
+      { orgId: request.user.orgId!, agentId: request.params.agentId },
+      request.user.id
     );
     return { deleted };
   },
@@ -88,10 +91,17 @@ export const optimizationController = {
   async issueCacheContext(request: FastifyRequest<{ Params: AgentParams }>) {
     await requireAgentAccess(request);
     const body = parse(cacheContextBody, request.body);
-    const token = issueCacheUserContext({ orgId: request.user.orgId!,
-      agentId: request.params.agentId, ...body });
-    await auditRepository.record({ orgId: request.user.orgId!, actorUserId: request.user.id,
-      eventType: 'cache_user_context_issued', targetType: 'agent', targetId: request.params.agentId,
+    const token = issueCacheUserContext({
+      orgId: request.user.orgId!,
+      agentId: request.params.agentId,
+      ...body,
+    });
+    await auditRepository.record({
+      orgId: request.user.orgId!,
+      actorUserId: request.user.id,
+      eventType: 'cache_user_context_issued',
+      targetType: 'agent',
+      targetId: request.params.agentId,
       metadata: { ttlSeconds: 300 },
     });
     return { token, expiresInSeconds: 300 };

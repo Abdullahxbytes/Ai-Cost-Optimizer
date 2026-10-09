@@ -1,16 +1,37 @@
-import { canAccessAgent, canAccessTeam, requireOrgScope, requireRole } from '../../src/middleware/rbac';
+import {
+  canAccessAgent,
+  canAccessTeam,
+  requireOrgScope,
+  requireRole,
+} from '../../src/middleware/rbac';
 import { seedRbacFixture } from '../helpers/rbac';
 
 describe('RBAC middleware core behavior', () => {
   it('requireRole([]) rejects tenant roles and Super Admin without an implicit bypass', async () => {
-    for (const role of ['org_admin', 'team_lead', 'developer', 'finance', 'auditor', 'super_admin'] as const) {
-      await expect(requireRole([])({ user: { id: 'user', orgId: role === 'super_admin' ? null : 'org', role } } as never)).rejects.toMatchObject({ statusCode: 403 });
+    for (const role of [
+      'org_admin',
+      'team_lead',
+      'developer',
+      'finance',
+      'auditor',
+      'super_admin',
+    ] as const) {
+      await expect(
+        requireRole([])({
+          user: { id: 'user', orgId: role === 'super_admin' ? null : 'org', role },
+        } as never)
+      ).rejects.toMatchObject({ statusCode: 403 });
     }
   });
 
   it('requireOrgScope rejects a resource belonging to a different organization', async () => {
     const f = await seedRbacFixture();
-    await expect(requireOrgScope()({ params: { orgId: f.orgB.id }, user: { id: f.users.adminA.id, orgId: f.orgA.id, role: 'org_admin' } } as never)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      requireOrgScope()({
+        params: { orgId: f.orgB.id },
+        user: { id: f.users.adminA.id, orgId: f.orgA.id, role: 'org_admin' },
+      } as never)
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('canAccessTeam and canAccessAgent honor lead assignments, ownership, and org-admin access', async () => {

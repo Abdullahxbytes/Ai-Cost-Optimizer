@@ -48,7 +48,9 @@ export const superAdmins = pgTable('super_admins', {
   twoFactorLastTimeStep: integer('two_factor_last_time_step'),
   tokenVersion: integer('token_version').default(0).notNull(),
   // A removed Super Admin must not block hard deletion of their successors.
-  createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

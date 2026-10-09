@@ -17,29 +17,25 @@ export function requireOrgScope() {
     const params = request.params as { orgId?: string; teamId?: string; agentId?: string };
     const resource = params.orgId
       ? (
-          await db
-            .select({ orgId: orgs.id })
-            .from(orgs)
-            .where(eq(orgs.id, params.orgId))
-            .limit(1)
+          await db.select({ orgId: orgs.id }).from(orgs).where(eq(orgs.id, params.orgId)).limit(1)
         )[0]
       : params.teamId
-      ? (
-          await db
-            .select({ orgId: teams.orgId })
-            .from(teams)
-            .where(eq(teams.id, params.teamId))
-            .limit(1)
-        )[0]
-      : params.agentId
         ? (
             await db
-              .select({ orgId: agents.orgId })
-              .from(agents)
-              .where(eq(agents.id, params.agentId))
+              .select({ orgId: teams.orgId })
+              .from(teams)
+              .where(eq(teams.id, params.teamId))
               .limit(1)
           )[0]
-        : undefined;
+        : params.agentId
+          ? (
+              await db
+                .select({ orgId: agents.orgId })
+                .from(agents)
+                .where(eq(agents.id, params.agentId))
+                .limit(1)
+            )[0]
+          : undefined;
     if (!resource) {
       if (!params.orgId && !params.teamId && !params.agentId)
         throw new ValidationError('No scoped resource route parameter provided');
@@ -62,7 +58,12 @@ export async function canAccessTeam(user: AuthenticatedUser, teamId: string): Pr
 
 export async function canAccessAgent(user: AuthenticatedUser, agentId: string): Promise<boolean> {
   const [agent] = await db
-    .select({ orgId: agents.orgId, teamId: agents.teamId, ownerUserId: agents.ownerUserId, teamStatus: teams.status })
+    .select({
+      orgId: agents.orgId,
+      teamId: agents.teamId,
+      ownerUserId: agents.ownerUserId,
+      teamStatus: teams.status,
+    })
     .from(agents)
     .leftJoin(teams, eq(agents.teamId, teams.id))
     .where(eq(agents.id, agentId))

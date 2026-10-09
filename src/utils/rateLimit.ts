@@ -25,10 +25,13 @@ export async function consumeRateLimit(input: {
 }): Promise<void> {
   const window = windowDetails(input.windowSeconds);
   const key = `ratelimit:${input.key}:${window.suffix}`;
-  const results = await redis.multi().incr(key).expire(key, input.windowSeconds + 1).exec();
+  const results = await redis
+    .multi()
+    .incr(key)
+    .expire(key, input.windowSeconds + 1)
+    .exec();
   const count = Number(results?.[0]);
-  if (count > input.limit)
-    throw new RateLimitError(window.retryAfter, input.scope, input.message);
+  if (count > input.limit) throw new RateLimitError(window.retryAfter, input.scope, input.message);
 }
 
 export async function assertFailureLimit(input: {
@@ -39,8 +42,7 @@ export async function assertFailureLimit(input: {
 }): Promise<void> {
   const ttl = await redis.ttl(`ratelimit:failure:${input.key}`);
   const count = Number((await redis.get(`ratelimit:failure:${input.key}`)) ?? 0);
-  if (count >= input.limit)
-    throw new RateLimitError(Math.max(1, ttl), input.scope, input.message);
+  if (count >= input.limit) throw new RateLimitError(Math.max(1, ttl), input.scope, input.message);
 }
 
 export async function recordFailure(input: {

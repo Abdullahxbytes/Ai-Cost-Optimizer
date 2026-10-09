@@ -82,22 +82,30 @@ export const responseCache = pgTable(
   })
 );
 
-export const cacheRequestDiagnostics = pgTable('cache_request_diagnostics', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => orgs.id, { onDelete: 'cascade' }),
-  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id'),
-  provider: text('provider').notNull(),
-  model: text('model'),
-  outcome: text('outcome').notNull(),
-  reason: text('reason').notNull(),
-  lookupLatencyMs: integer('lookup_latency_ms').notNull(),
-  embeddingLatencyMs: integer('embedding_latency_ms'),
-  embeddingInputTokens: integer('embedding_input_tokens'),
-  embeddingCostUsd: numeric('embedding_cost_usd', { precision: 12, scale: 6 }),
-  embeddingCostStatus: text('embedding_cost_status').notNull().default('none'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  scopeIndex: index('cache_request_diagnostics_scope').on(t.orgId, t.agentId, t.createdAt),
-  latencyCheck: check('cache_diagnostics_latency_nonnegative', sql`${t.lookupLatencyMs} >= 0`),
-}));
+export const cacheRequestDiagnostics = pgTable(
+  'cache_request_diagnostics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    taskId: uuid('task_id'),
+    provider: text('provider').notNull(),
+    model: text('model'),
+    outcome: text('outcome').notNull(),
+    reason: text('reason').notNull(),
+    lookupLatencyMs: integer('lookup_latency_ms').notNull(),
+    embeddingLatencyMs: integer('embedding_latency_ms'),
+    embeddingInputTokens: integer('embedding_input_tokens'),
+    embeddingCostUsd: numeric('embedding_cost_usd', { precision: 12, scale: 6 }),
+    embeddingCostStatus: text('embedding_cost_status').notNull().default('none'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    scopeIndex: index('cache_request_diagnostics_scope').on(t.orgId, t.agentId, t.createdAt),
+    latencyCheck: check('cache_diagnostics_latency_nonnegative', sql`${t.lookupLatencyMs} >= 0`),
+  })
+);

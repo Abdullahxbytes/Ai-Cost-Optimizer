@@ -6,7 +6,17 @@ try {
   assertCanRemoveSuperAdmin(1);
   throw new Error('Last-admin guard did not reject');
 } catch (error) {
-  if (!(error instanceof ValidationError) || error.message !== 'Cannot remove the last remaining Super Admin')
+  if (
+    !(error instanceof ValidationError) ||
+    error.message !== 'Cannot remove the last remaining Super Admin'
+  )
     throw error;
-  console.log(JSON.stringify({ count: 1, statusCode: error.statusCode, code: error.code, error: error.message }));
+  console.log(
+    JSON.stringify({
+      count: 1,
+      statusCode: error.statusCode,
+      code: error.code,
+      error: error.message,
+    })
+  );
 }
