@@ -1,6 +1,6 @@
 # CostFlow security controls register
 
-Last reviewed: 2026-10-07 (cache Stage 1; earlier controls retained)
+Last reviewed: 2026-10-09 (cache Stage 2; earlier controls retained)
 
 ## Purpose
 
@@ -112,6 +112,7 @@ Every deployment must explicitly review:
 - `AGENT_KEY_HMAC_SECRET`
 - `PROVIDER_KEY_ENCRYPTION_SECRET`
 - `TOTP_ENCRYPTION_SECRET`
+- `CACHE_CONTEXT_SIGNING_SECRET` when using end-user-scoped caching
 - all rate-limit environment values
 - TLS termination, firewall/security-group rules, Redis/PostgreSQL exposure, backups, and secret storage
 
