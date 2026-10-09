@@ -9,7 +9,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
   app.post('/login', async (req) => userController.login(req.body, req.ip));
   app.post('/2fa/setup', async (req) => userController.setup(req.headers.authorization));
   app.post('/2fa/verify', async (req) =>
-    userController.verify(req.headers.authorization, req.body)
+    userController.verify(req.headers.authorization, req.body, req.ip)
   );
   app.post('/change-password', { preHandler: [authenticate] }, async (req) =>
     userController.changePassword(req.user, req.body)

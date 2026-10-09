@@ -32,11 +32,6 @@ export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const signupSuccess = Boolean((location.state as { signupSuccess?: boolean } | null)?.signupSuccess);
-  useEffect(() => {
-    const returnToLanding = () => navigate('/', { replace: true });
-    window.addEventListener('popstate', returnToLanding);
-    return () => window.removeEventListener('popstate', returnToLanding);
-  }, [navigate]);
   if (user) return <Navigate to={defaultRouteForRole(user.role)} replace />;
   async function submitCredentials(event: FormEvent) {
     event.preventDefault();

@@ -6,12 +6,32 @@ import type { Agent } from '../types/resources';
 
 const columns = createColumnHelper<Agent>();
 const shortId = (value: string | null) => (value ? `${value.slice(0, 8)}...` : '-');
-const initials = (value: string) => value.split(/[@._\s-]/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-const statusClass = (agent: Agent) => agent.status === 'pending_approval' && agent.approvalStatus === 'rejected' ? 'status-rejected' : `status-${agent.status.replaceAll('_', '-')}`;
+const initials = (value: string) =>
+  value
+    .split(/[@._\s-]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+const statusClass = (agent: Agent) =>
+  agent.status === 'pending_approval' && agent.approvalStatus === 'rejected'
+    ? 'status-rejected'
+    : `status-${agent.status.replaceAll('_', '-')}`;
 const errorMessage = (error: unknown) =>
   axios.isAxiosError(error) ? (error.response?.data?.error ?? 'Request failed') : 'Request failed';
 
-export function AgentTable({ agents, canApprove, onRequestDeletion, onConfigureOptimization }: { agents: Agent[]; canApprove?: boolean; onRequestDeletion?: (agent: Agent) => void; onConfigureOptimization?: (agent: Agent) => void }) {
+export function AgentTable({
+  agents,
+  canApprove,
+  onRequestDeletion,
+  onConfigureOptimization,
+}: {
+  agents: Agent[];
+  canApprove?: boolean;
+  onRequestDeletion?: (agent: Agent) => void;
+  onConfigureOptimization?: (agent: Agent) => void;
+}) {
   const queryClient = useQueryClient();
   const action = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: 'pause' | 'resume' | 'approve' | 'reject' }) =>
@@ -22,12 +42,21 @@ export function AgentTable({ agents, canApprove, onRequestDeletion, onConfigureO
     data: agents,
     getCoreRowModel: getCoreRowModel(),
     columns: [
-      columns.accessor('name', { header: 'Name' }),
+      columns.accessor('name', {
+        header: 'Name',
+        cell: (info) => <span className="agent-table-name">{info.getValue()}</span>,
+      }),
       columns.accessor('status', {
         header: 'Status',
         cell: (info) => {
           const agent = info.row.original;
-          return <span className={`status-pill ${statusClass(agent)}`}>{agent.status === 'pending_approval' && agent.approvalStatus === 'rejected' ? 'Rejected' : info.getValue().replace('_', ' ')}</span>;
+          return (
+            <span className={`status-pill ${statusClass(agent)}`}>
+              {agent.status === 'pending_approval' && agent.approvalStatus === 'rejected'
+                ? 'Rejected'
+                : info.getValue().replace('_', ' ')}
+            </span>
+          );
         },
       }),
       columns.accessor('teamName', {
@@ -36,7 +65,17 @@ export function AgentTable({ agents, canApprove, onRequestDeletion, onConfigureO
       }),
       columns.accessor('ownerEmail', {
         header: 'Owner',
-        cell: (info) => { const email = info.getValue(); return email ? <span className="identity"><span className="identity-avatar">{initials(email)}</span>{email}</span> : shortId(info.row.original.ownerUserId); },
+        cell: (info) => {
+          const email = info.getValue();
+          return email ? (
+            <span className="identity">
+              <span className="identity-avatar">{initials(email)}</span>
+              {email}
+            </span>
+          ) : (
+            shortId(info.row.original.ownerUserId)
+          );
+        },
       }),
       columns.display({
         id: 'actions',
@@ -49,9 +88,17 @@ export function AgentTable({ agents, canApprove, onRequestDeletion, onConfigureO
                 <ActionButton
                   busy={action.isPending}
                   label={agent.status === 'active' ? 'Pause' : 'Resume'}
-                  onClick={() => action.mutate({ id: agent.id, action: agent.status === 'active' ? 'pause' : 'resume' })}
+                  onClick={() =>
+                    action.mutate({ id: agent.id, action: agent.status === 'active' ? 'pause' : 'resume' })
+                  }
                 />
-                {agent.status === 'active' && onRequestDeletion && <ActionButton busy={false} label="Request deletion" onClick={() => onRequestDeletion(agent)} />}
+                {agent.status === 'active' && onRequestDeletion && (
+                  <ActionButton
+                    busy={false}
+                    label="Request deletion"
+                    onClick={() => onRequestDeletion(agent)}
+                  />
+                )}
               </span>
             );
           }
@@ -74,14 +121,28 @@ export function AgentTable({ agents, canApprove, onRequestDeletion, onConfigureO
           return '-';
         },
       }),
-      ...(onConfigureOptimization ? [columns.display({ id: 'optimization', header: 'Optimization', cell: ({ row }) => <ActionButton busy={false} label="Settings" onClick={() => onConfigureOptimization(row.original)} /> })] : []),
+      ...(onConfigureOptimization
+        ? [
+            columns.display({
+              id: 'optimization',
+              header: 'Optimization',
+              cell: ({ row }) => (
+                <ActionButton
+                  busy={false}
+                  label="Settings"
+                  onClick={() => onConfigureOptimization(row.original)}
+                />
+              ),
+            }),
+          ]
+        : []),
     ],
   });
   return (
     <>
       {agents.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="agent-table w-full text-left text-sm">
             <thead className="border-b border-slate-800 text-slate-400">
               {table.getHeaderGroups().map((group) => (
                 <tr key={group.id}>

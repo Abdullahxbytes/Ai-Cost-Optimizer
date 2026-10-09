@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { authenticate } from '../../middleware/auth';
 import { requireOrgScope, requireRole } from '../../middleware/rbac';
 import { teamsController } from './teams.controller';
+import { exportRateLimit } from '../../middleware/rateLimits';
 
 export const teamsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/teams', { preHandler: [authenticate, requireRole(['org_admin', 'team_lead'])] }, (request) =>
@@ -22,5 +23,5 @@ export const teamsRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/teams/:teamId/members/:userId', { preHandler: scopedAccess }, (request) => teamsController.removeMember(request as never));
   app.post('/teams/:teamId/deletion', { preHandler: [authenticate, requireRole(['org_admin']), requireOrgScope()] }, (request) => teamsController.requestDeletion(request as never));
   app.get('/team-deletions', { preHandler: [authenticate, requireRole(['org_admin', 'finance', 'auditor'])] }, (request) => teamsController.listArchivedDeletions(request));
-  app.get('/team-deletions/:deletionId/export', { preHandler: [authenticate, requireRole(['org_admin', 'finance', 'auditor'])] }, (request, reply) => teamsController.exportArchivedDeletion(request as never, reply));
+  app.get('/team-deletions/:deletionId/export', { preHandler: [authenticate, requireRole(['org_admin', 'finance', 'auditor']), exportRateLimit] }, (request, reply) => teamsController.exportArchivedDeletion(request as never, reply));
 };

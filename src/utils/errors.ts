@@ -29,8 +29,12 @@ export class ValidationError extends AppError {
   }
 }
 export class RateLimitError extends AppError {
-  constructor(public retryAfter = 60) {
-    super(429, 'Rate limit exceeded', 'RATE_LIMIT');
+  constructor(
+    public retryAfter = 60,
+    public scope: 'agent' | 'organization' | 'user' | 'account' | 'ip' | 'global' | 'endpoint' = 'endpoint',
+    message = 'Rate limit exceeded'
+  ) {
+    super(429, message, 'RATE_LIMIT');
   }
 }
 

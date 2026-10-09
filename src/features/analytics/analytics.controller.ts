@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { ValidationError } from '../../utils/errors';
 import { AnalyticsRequest, analyticsService } from './analytics.service';
 
+const MAX_ANALYTICS_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+
 const querySchema = z.object({
   from: z.coerce.date().optional(), to: z.coerce.date().optional(),
   bucket: z.enum(['daily', 'weekly', 'monthly']).optional(),
@@ -25,6 +27,9 @@ function request(query: unknown): AnalyticsRequest {
 
   const from = parsed.data.from ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
   if (from > to) throw new ValidationError('from must be before to');
+  if (to.getTime() - from.getTime() > MAX_ANALYTICS_RANGE_MS) {
+    throw new ValidationError('Analytics range cannot exceed 366 days');
+  }
   return { scope: parsed.data.scope, scopeId: parsed.data.scopeId, bucket: parsed.data.bucket, range: { from, to } };
 }
 

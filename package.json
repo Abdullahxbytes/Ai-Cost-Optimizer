@@ -19,6 +19,8 @@
     "bootstrap:superadmin": "tsx scripts/bootstrapSuperAdmin.ts",
     "add:superadmin": "tsx scripts/addSuperAdmin.ts",
     "migrate:agent-keys": "tsx scripts/migrateAgentKeyHashes.ts",
+    "migrate:cache-stage-one": "tsx scripts/migrateCacheStageOne.ts",
+    "migrate:cache-stage-two": "tsx scripts/migrateCacheStageTwo.ts",
     "verify:last-superadmin-guard": "tsx scripts/verifyLastSuperAdminGuard.ts",
     "scan:alerts": "tsx scripts/runAlertScan.ts",
     "cleanup:team-archives": "tsx scripts/runTeamArchiveCleanup.ts",

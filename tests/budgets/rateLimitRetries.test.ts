@@ -11,8 +11,18 @@ import { geminiRequest, seedFinancialFixture, waitFor } from '../helpers/financi
 describe('proxy rate limits and provider retries', () => {
   it('returns 429 and retryAfter once the per-agent minute limit is exceeded', async () => {
     const f = await seedFinancialFixture({ agentCount: 1 }); const app = await testApp();
-    try { const window = Math.floor(Date.now() / 60_000); await redis.set(`ratelimit:agent:${f.agents[0].id}:${window}`, '60'); const response = await app.inject(geminiRequest(f.agents[0].rawKey)); expect(response.statusCode).toBe(429); expect(response.json().retryAfter).toEqual(expect.any(Number)); }
+    try { const window = Math.floor(Date.now() / 60_000); await redis.set(`ratelimit:agent:${f.agents[0].id}:${window}`, '60'); const response = await app.inject(geminiRequest(f.agents[0].rawKey)); expect(response.statusCode).toBe(429); expect(response.json()).toMatchObject({ retryAfter: expect.any(Number), scope: 'agent', code: 'RATE_LIMIT' }); expect(response.headers['retry-after']).toBeDefined(); }
     finally { await app.close(); }
+  });
+  it('enforces an organization-wide proxy limit independently of agent limits', async () => {
+    const f = await seedFinancialFixture({ agentCount: 1 }); const app = await testApp();
+    try {
+      const window = Math.floor(Date.now() / 60_000);
+      await redis.set(`ratelimit:proxy-org:${f.org.id}:${window}`, '3000');
+      const response = await app.inject(geminiRequest(f.agents[0].rawKey));
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toMatchObject({ scope: 'organization', code: 'RATE_LIMIT' });
+    } finally { await app.close(); }
   });
   it('does not retry a mocked provider 4xx response', async () => {
     const f = await seedFinancialFixture({ agentCount: 1 }); const app = await testApp(); const spy = jest.spyOn(axios, 'post').mockResolvedValue({ status: 401, data: {}, headers: {} } as never);

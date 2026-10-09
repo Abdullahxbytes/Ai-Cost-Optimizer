@@ -5,14 +5,22 @@ import { env } from '../../config/env';
 import { AuthError, ForbiddenError, NotFoundError, ValidationError } from '../../utils/errors';
 import { AuthenticatedUser } from '../../middleware/auth';
 import { userRepository } from './user.repository';
-import { enforceAuthRateLimit } from '../../utils/authRateLimit';
+import { decryptTotpSecret, encryptTotpSecret } from './totp.crypto';
+import {
+  assertFailureLimit,
+  clearFailureLimit,
+  privateRateLimitIdentity,
+  recordFailure,
+} from '../../utils/rateLimit';
 type Pending = { user_id: string; org_id: string | null; purpose: '2fa_pending' };
 // `otplib` currently ships ESM-only transitive dependencies. Keep this native dynamic import so
 // the CommonJS build and Jest can load the authentication service under Node 22 as well.
 const loadOtpLib = (): Promise<{
   generateSecret: () => string;
   generateURI: (input: { issuer: string; label: string; secret: string }) => string;
-  verify: (input: { token: string; secret: string; epochTolerance?: number }) => Promise<{ valid: boolean }>;
+  verify: (input: { token: string; secret: string; epochTolerance?: number; afterTimeStep?: number }) => Promise<
+    { valid: false } | { valid: true; timeStep: number }
+  >;
 }> =>
   new Function('modulePath', 'return import(modulePath)')('otplib');
 type Principal = {
@@ -21,6 +29,7 @@ type Principal = {
   email: string;
   role: 'super_admin' | 'org_admin' | 'team_lead' | 'developer' | 'finance' | 'auditor';
   twoFactorSecret: string | null;
+  twoFactorLastTimeStep: number | null;
   tokenVersion: number;
 };
 export type ManagedRole = 'org_admin' | 'finance' | 'auditor' | 'team_lead' | 'developer';
@@ -60,12 +69,26 @@ export const userService = {
       await bcrypt.hash(b.password, 12)
     ),
   login: async (b: { email: string; password: string }, ip: string) => {
-    await enforceAuthRateLimit(`auth:login:${b.email.toLowerCase()}:${ip}`, 5, 15 * 60);
-    const rows = await userRepository.findUsersByEmail(b.email.toLowerCase());
+    const normalizedEmail = b.email.toLowerCase();
+    const accountKey = `login-account:${privateRateLimitIdentity(normalizedEmail)}`;
+    const ipKey = `login-ip:${privateRateLimitIdentity(ip)}`;
+    await Promise.all([
+      assertFailureLimit({ key: accountKey, limit: 5, scope: 'account', message: 'Account login attempts exceeded' }),
+      assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'IP login attempts exceeded' }),
+    ]);
+    const rejectCredentials = async (): Promise<never> => {
+      await Promise.all([
+        recordFailure({ key: accountKey, limit: 5, ttlSeconds: 15 * 60, scope: 'account', message: 'Account login attempts exceeded' }),
+        recordFailure({ key: ipKey, limit: 30, ttlSeconds: 15 * 60, scope: 'ip', message: 'IP login attempts exceeded' }),
+      ]);
+      throw new AuthError('Invalid credentials');
+    };
+    const rows = await userRepository.findUsersByEmail(normalizedEmail);
     if (rows.length === 1) {
       const u = rows[0];
       if (!u.active || u.orgStatus !== 'active' || !(await bcrypt.compare(b.password, u.passwordHash)))
-        throw new AuthError('Invalid credentials');
+        return rejectCredentials();
+      await clearFailureLimit(accountKey);
       return {
         pendingToken: jwt.sign(
           { user_id: u.userId, org_id: u.orgId, purpose: '2fa_pending' },
@@ -75,10 +98,11 @@ export const userService = {
         twoFactorConfigured: u.twoFactorSecret !== null,
       };
     }
-    if (rows.length > 1) throw new AuthError('Invalid credentials');
-    const [a] = await userRepository.findSuperAdminByEmail(b.email.toLowerCase());
+    if (rows.length > 1) return rejectCredentials();
+    const [a] = await userRepository.findSuperAdminByEmail(normalizedEmail);
     if (!a || !(await bcrypt.compare(b.password, a.passwordHash)))
-      throw new AuthError('Invalid credentials');
+      return rejectCredentials();
+    await clearFailureLimit(accountKey);
     return {
       pendingToken: jwt.sign(
         { user_id: a.id, org_id: null, purpose: '2fa_pending' },
@@ -101,13 +125,18 @@ export const userService = {
       throw new ValidationError('2FA already configured, use /auth/2fa/verify');
     const { generateSecret, generateURI } = await loadOtpLib();
     const secret = generateSecret();
-    await userRepository.setTwoFactorSecret(u.id, u.orgId, secret);
-    const url = generateURI({ issuer: 'AICostOptimizer', label: u.email, secret });
+    await userRepository.setTwoFactorSecret(u.id, u.orgId, encryptTotpSecret(secret));
+    const url = generateURI({ issuer: 'CostFlow', label: u.email, secret });
     return { qrCodeDataUrl: await QRCode.toDataURL(url), manualEntryKey: secret };
   },
-  verifyTwoFactor: async (auth: string | undefined, code: string) => {
+  verifyTwoFactor: async (auth: string | undefined, code: string, ip: string) => {
     const p = pending(auth);
-    await enforceAuthRateLimit(`auth:2fa:${p.user_id}`, 5, 10 * 60);
+    const accountKey = `2fa-account:${p.user_id}`;
+    const ipKey = `2fa-ip:${privateRateLimitIdentity(ip)}`;
+    await Promise.all([
+      assertFailureLimit({ key: accountKey, limit: 5, scope: 'account', message: 'Account authentication attempts exceeded' }),
+      assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'IP authentication attempts exceeded' }),
+    ]);
     const raw = await userRepository.findPendingPrincipal(p.user_id, p.org_id);
     const u: Principal | undefined =
       raw &&
@@ -117,10 +146,30 @@ export const userService = {
     if (!u || u.orgId !== p.org_id || !u.twoFactorSecret)
       throw new ValidationError('Complete /auth/2fa/setup first');
     const { verify } = await loadOtpLib();
+    const storedSecret = decryptTotpSecret(u.twoFactorSecret);
     // Accept the adjacent 30-second TOTP period to tolerate small device/server
     // clock drift while retaining the normal six-digit authentication requirement.
-    if (!(await verify({ token: code, secret: u.twoFactorSecret, epochTolerance: 30 })).valid)
+    const result = await verify({
+      token: code,
+      secret: storedSecret.secret,
+      epochTolerance: 30,
+      ...(u.twoFactorLastTimeStep !== null && { afterTimeStep: u.twoFactorLastTimeStep }),
+    });
+    if (!result.valid) {
+      await Promise.all([
+        recordFailure({ key: accountKey, limit: 5, ttlSeconds: 10 * 60, scope: 'account', message: 'Account authentication attempts exceeded' }),
+        recordFailure({ key: ipKey, limit: 30, ttlSeconds: 10 * 60, scope: 'ip', message: 'IP authentication attempts exceeded' }),
+      ]);
       throw new AuthError('Invalid code');
+    }
+    const accepted = await userRepository.acceptTwoFactorTimeStep(
+      u.id,
+      u.orgId,
+      result.timeStep,
+      storedSecret.encrypted ? undefined : encryptTotpSecret(storedSecret.secret)
+    );
+    if (!accepted) throw new AuthError('Code already used');
+    await clearFailureLimit(accountKey);
     const token = jwt.sign({ user_id: u.id, org_id: u.orgId, role: u.role, token_version: u.tokenVersion }, env.JWT_SECRET, {
       expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });

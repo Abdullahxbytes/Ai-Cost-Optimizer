@@ -4,6 +4,7 @@ import { db } from '../config/database';
 import { agents, orgs, teams } from '../db/schema';
 import { AuthError, ForbiddenError } from '../utils/errors';
 import { hashAgentKey } from '../utils/agentKey';
+import { assertFailureLimit, privateRateLimitIdentity, recordFailure } from '../utils/rateLimit';
 
 export type AgentStatus = 'pending_approval' | 'active' | 'paused' | 'pending_deletion';
 export type AuthenticatedAgent = {
@@ -21,8 +22,14 @@ declare module 'fastify' {
 }
 
 export async function agentAuth(request: FastifyRequest) {
+  const ipKey = `agent-auth-ip:${privateRateLimitIdentity(request.ip)}`;
+  await assertFailureLimit({ key: ipKey, limit: 30, scope: 'ip', message: 'Agent authentication attempts exceeded' });
   const key = request.headers['x-agent-key'];
-  if (!key || Array.isArray(key)) throw new AuthError('Invalid agent key');
+  const rejectKey = async (): Promise<never> => {
+    await recordFailure({ key: ipKey, limit: 30, ttlSeconds: 60, scope: 'ip', message: 'Agent authentication attempts exceeded' });
+    throw new AuthError('Invalid agent key');
+  };
+  if (!key || Array.isArray(key)) return rejectKey();
   const [agent] = await db
     .select({
       id: agents.id,
@@ -38,10 +45,9 @@ export async function agentAuth(request: FastifyRequest) {
     .leftJoin(teams, eq(agents.teamId, teams.id))
     .where(eq(agents.apiKey, hashAgentKey(key)))
     .limit(1);
-  if (!agent) throw new AuthError('Invalid agent key');
+  if (!agent) return rejectKey();
   if (agent.orgStatus !== 'active') throw new ForbiddenError('Organization is blocked');
   if (agent.teamStatus === 'archived') throw new ForbiddenError('Team is archived');
-  if (agent.status === 'pending_approval') throw new ForbiddenError('Agent pending approval');
-  if (agent.status === 'paused') throw new ForbiddenError('Agent paused');
+  if (agent.status !== 'active') throw new ForbiddenError('Agent is not active');
   request.agent = agent;
 }

@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { orgs, superAdmins, users } from '../../db/schema';
 import { ValidationError } from '../../utils/errors';
@@ -68,6 +68,7 @@ export const userRepository = {
               id: superAdmins.id,
               email: superAdmins.email,
               twoFactorSecret: superAdmins.twoFactorSecret,
+              twoFactorLastTimeStep: superAdmins.twoFactorLastTimeStep,
               tokenVersion: superAdmins.tokenVersion,
             })
             .from(superAdmins)
@@ -82,6 +83,7 @@ export const userRepository = {
               email: users.email,
               role: users.role,
               twoFactorSecret: users.twoFactorSecret,
+              twoFactorLastTimeStep: users.twoFactorLastTimeStep,
               tokenVersion: users.tokenVersion,
             })
             .from(users)
@@ -90,11 +92,32 @@ export const userRepository = {
         )[0],
   setTwoFactorSecret: (id: string, orgId: string | null, secret: string) =>
     orgId === null
-      ? db.update(superAdmins).set({ twoFactorSecret: secret }).where(eq(superAdmins.id, id))
+      ? db.update(superAdmins).set({ twoFactorSecret: secret, twoFactorLastTimeStep: null }).where(eq(superAdmins.id, id))
       : db
           .update(users)
-          .set({ twoFactorSecret: secret, updatedAt: new Date() })
+          .set({ twoFactorSecret: secret, twoFactorLastTimeStep: null, updatedAt: new Date() })
           .where(eq(users.id, id)),
+  async acceptTwoFactorTimeStep(
+    id: string,
+    orgId: string | null,
+    timeStep: number,
+    encryptedSecret?: string
+  ) {
+    const current = orgId === null ? superAdmins.twoFactorLastTimeStep : users.twoFactorLastTimeStep;
+    const predicate = or(isNull(current), lt(current, timeStep));
+    if (orgId === null) {
+      const [updated] = await db.update(superAdmins)
+        .set({ twoFactorLastTimeStep: timeStep, ...(encryptedSecret && { twoFactorSecret: encryptedSecret }) })
+        .where(and(eq(superAdmins.id, id), predicate))
+        .returning({ id: superAdmins.id });
+      return Boolean(updated);
+    }
+    const [updated] = await db.update(users)
+      .set({ twoFactorLastTimeStep: timeStep, ...(encryptedSecret && { twoFactorSecret: encryptedSecret }), updatedAt: new Date() })
+      .where(and(eq(users.id, id), eq(users.orgId, orgId), predicate))
+      .returning({ id: users.id });
+    return Boolean(updated);
+  },
   async findActiveTenantPrincipal(id: string, orgId: string) {
     return (await db.select({ id: users.id, role: users.role, tokenVersion: users.tokenVersion, orgStatus: orgs.status }).from(users)
       .innerJoin(orgs, eq(users.orgId, orgs.id))

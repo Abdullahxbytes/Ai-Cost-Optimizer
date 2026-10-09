@@ -25,8 +25,8 @@ export const userController = {
   signup: (b: unknown) => userService.signup(parse(signup, b)),
   login: (b: unknown, ip: string) => userService.login(parse(login, b), ip),
   setup: (a: string | undefined) => userService.setupTwoFactor(a),
-  verify: (a: string | undefined, b: unknown) =>
-    userService.verifyTwoFactor(a, parse(verify, b).code),
+  verify: (a: string | undefined, b: unknown, ip: string) =>
+    userService.verifyTwoFactor(a, parse(verify, b).code, ip),
   createOrganizationUser: (user: AuthenticatedUser, orgId: string, b: unknown) => userService.createOrganizationUser(user, orgId, parse(createOrganizationUser, b)),
   updateOrganizationUserRole: (user: AuthenticatedUser, orgId: string, userId: string, b: unknown) => userService.updateOrganizationUserRole(user, orgId, userId, parse(updateOrganizationUser, b).role),
   removeOrganizationUser: (user: AuthenticatedUser, orgId: string, userId: string) => userService.removeOrganizationUser(user, orgId, userId),

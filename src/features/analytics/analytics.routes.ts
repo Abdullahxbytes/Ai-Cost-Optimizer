@@ -2,9 +2,14 @@ import { FastifyPluginAsync } from 'fastify';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/rbac';
 import { analyticsController } from './analytics.controller';
+import { analyticsRateLimit } from '../../middleware/security';
 
 export const analyticsRoutes: FastifyPluginAsync = async (app) => {
-  const access = [authenticate, requireRole(['org_admin', 'finance', 'team_lead', 'developer'])];
+  const access = [
+    authenticate,
+    requireRole(['org_admin', 'finance', 'team_lead', 'developer']),
+    analyticsRateLimit,
+  ];
   app.get('/analytics/costs/by-time', { preHandler: access }, (request) => analyticsController.byTime(request));
   app.get('/analytics/costs/by-provider', { preHandler: access }, (request) => analyticsController.byProvider(request));
   app.get('/analytics/costs/by-model', { preHandler: access }, (request) => analyticsController.byModel(request));

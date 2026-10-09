@@ -12,6 +12,21 @@ export const optimizationRoutes: FastifyPluginAsync = async (app) => {
   app.get('/agents/:agentId/optimization-settings', { preHandler: agentAccess }, (request) =>
     optimizationController.getSettings(request as never)
   );
+  app.get('/agents/:agentId/cache-policy', { preHandler: agentAccess }, (request) =>
+    optimizationController.getCachePolicy(request as never)
+  );
+  app.put('/agents/:agentId/cache-policy', { preHandler: agentAccess }, (request) =>
+    optimizationController.replaceCachePolicy(request as never)
+  );
+  app.delete('/agents/:agentId/cache', { preHandler: agentAccess }, (request) =>
+    optimizationController.purgeCache(request as never)
+  );
+  app.post('/agents/:agentId/cache-context', { preHandler: agentAccess }, (request) =>
+    optimizationController.issueCacheContext(request as never)
+  );
+  app.get('/agents/:agentId/cache-diagnostics', { preHandler: agentAccess }, (request) =>
+    optimizationController.getCacheDiagnostics(request as never)
+  );
   app.patch('/agents/:agentId/optimization-settings', { preHandler: agentAccess }, (request) =>
     optimizationController.patchSettings(request as never)
   );

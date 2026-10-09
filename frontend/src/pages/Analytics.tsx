@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import { formatCurrency, formatInteger, formatPercentage } from '../lib/formatters';
 import type { Team } from '../types/resources';
 
 type CostGroup = { provider: string; model?: string; totalCost: number; callCount: number };
@@ -49,13 +50,20 @@ type Simulation = {
   percentChange: number;
   disclaimer: string;
 };
-const money = (value: number) =>
-  `$${Number(value ?? 0).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 5,
-  })}`;
+const money = (value: number) => formatCurrency(value);
 const defaultFrom = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 const defaultTo = new Date().toISOString().slice(0, 10);
+const formatChartDate = (value: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${value}T00:00:00`));
+const shortenChartLabel = (value: string) => (value.length > 18 ? `${value.slice(0, 17)}…` : value);
+const chartTooltipStyle = {
+  border: '1px solid #E7DDC8',
+  borderRadius: '12px',
+  background: '#FFFDF7',
+  boxShadow: '0 14px 30px rgb(85 67 40 / 12%)',
+};
+const chartAxisTick = { fill: '#706A61', fontSize: 11 };
+const chartGrid = { vertical: false, strokeDasharray: '2 5', stroke: '#E7DDC8' };
 
 export function Analytics() {
   const user = useAuthStore((state) => state.user)!;
@@ -182,27 +190,68 @@ export function Analytics() {
       <section>
         <h2 className="text-xl font-semibold">Cost breakdown</h2>
         <div className="mt-4 grid gap-5 xl:grid-cols-2">
-          <ChartCard title="Cost by provider" loading={providers.isLoading} empty={!providers.data?.length}>
+          <ChartCard
+            title="Cost by provider"
+            description="Spend grouped by provider"
+            loading={providers.isLoading}
+            empty={!providers.data?.length}
+          >
             <BarChart data={providers.data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#847C74" />
-              <XAxis dataKey="provider" tick={{ fill: '#FCFCF9' }} />
-              <YAxis tick={{ fill: '#FCFCF9' }} tickFormatter={money} />
-              <Tooltip formatter={(value) => money(Number(value))} />
-              <Bar dataKey="totalCost" fill="#F27624" />
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="provider" axisLine={false} tickLine={false} tick={chartAxisTick} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={chartAxisTick}
+                width={64}
+                tickFormatter={money}
+              />
+              <Tooltip
+                formatter={(value) => [money(Number(value)), 'Cost']}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: '#1F201D', fontWeight: 600 }}
+                itemStyle={{ color: '#B9470D' }}
+                cursor={{ fill: 'rgb(216 91 18 / 6%)' }}
+              />
+              <Bar dataKey="totalCost" fill="#D85B12" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ChartCard>
-          <ChartCard title="Cost by model" loading={models.isLoading} empty={!models.data?.length}>
+          <ChartCard
+            title="Cost by model"
+            description="Spend grouped by model"
+            loading={models.isLoading}
+            empty={!models.data?.length}
+          >
             <BarChart
               data={(models.data ?? []).map((item) => ({
                 ...item,
                 label: `${item.provider}/${item.model}`,
               }))}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#847C74" />
-              <XAxis dataKey="label" tick={{ fill: '#FCFCF9', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#FCFCF9' }} tickFormatter={money} />
-              <Tooltip formatter={(value) => money(Number(value))} />
-              <Bar dataKey="totalCost" fill="#F27624" />
+              <CartesianGrid {...chartGrid} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={30}
+                tick={chartAxisTick}
+                tickFormatter={shortenChartLabel}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={chartAxisTick}
+                width={64}
+                tickFormatter={money}
+              />
+              <Tooltip
+                formatter={(value) => [money(Number(value)), 'Cost']}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: '#1F201D', fontWeight: 600 }}
+                itemStyle={{ color: '#B9470D' }}
+                cursor={{ fill: 'rgb(216 91 18 / 6%)' }}
+              />
+              <Bar dataKey="totalCost" fill="#D85B12" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ChartCard>
         </div>
@@ -210,8 +259,14 @@ export function Analytics() {
       <section>
         <h2 className="text-xl font-semibold">Token efficiency and savings</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Stat label="Input tokens" value={tokens.data?.totalInputTokens.toLocaleString() ?? '-'} />
-          <Stat label="Output tokens" value={tokens.data?.totalOutputTokens.toLocaleString() ?? '-'} />
+          <Stat
+            label="Input tokens"
+            value={tokens.data ? formatInteger(tokens.data.totalInputTokens) : '-'}
+          />
+          <Stat
+            label="Output tokens"
+            value={tokens.data ? formatInteger(tokens.data.totalOutputTokens) : '-'}
+          />
           <Stat label="Efficiency ratio" value={tokens.data ? tokens.data.efficiencyRatio.toFixed(3) : '-'} />
           <Stat label="Optimized calls" value={String(reduction.data?.totalCallsOptimized ?? '-')} />
         </div>
@@ -219,7 +274,9 @@ export function Analytics() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <h3 className="font-semibold">Optimization impact</h3>
             <p className="mt-3 text-3xl font-semibold text-cyan-300">
-              {reduction.data ? `${reduction.data.avgTokenReductionPercent.toFixed(2)}%` : '-'}
+              {reduction.data
+                ? formatPercentage(reduction.data.avgTokenReductionPercent, { maximumFractionDigits: 2 })
+                : '-'}
             </p>
             <p className="mt-1 text-sm text-slate-400">
               Average token reduction across calls where optimization reduced the prompt.
@@ -238,15 +295,46 @@ export function Analytics() {
           </div>
           <ChartCard
             title="Cache hit rate"
+            description="Daily share of requests served from cache"
             loading={hitRate.isLoading}
             empty={!hitRate.data?.some((row) => row.totalCalls > 0)}
           >
             <LineChart data={hitRate.data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#847C74" />
-              <XAxis dataKey="period" tick={{ fill: '#FCFCF9', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#FCFCF9' }} unit="%" />
-              <Tooltip formatter={(value) => `${Number(value).toFixed(2)}%`} />
-              <Line type="monotone" dataKey="hitRate" stroke="#F27624" strokeWidth={2} dot={false} />
+              <CartesianGrid {...chartGrid} />
+              <XAxis
+                dataKey="period"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={34}
+                tick={chartAxisTick}
+                tickFormatter={formatChartDate}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={chartAxisTick}
+                width={52}
+                tickFormatter={(value) => formatPercentage(Number(value), { maximumFractionDigits: 0 })}
+              />
+              <Tooltip
+                labelFormatter={(value) => formatChartDate(String(value))}
+                formatter={(value) => [
+                  formatPercentage(Number(value), { maximumFractionDigits: 2 }),
+                  'Hit rate',
+                ]}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: '#1F201D', fontWeight: 600 }}
+                itemStyle={{ color: '#B9470D' }}
+                cursor={{ stroke: '#D9CFBD', strokeDasharray: '3 4' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="hitRate"
+                stroke="#D85B12"
+                strokeWidth={2.5}
+                activeDot={{ r: 4, fill: '#D85B12', stroke: '#FFFDF7', strokeWidth: 2 }}
+                dot={false}
+              />
             </LineChart>
           </ChartCard>
         </div>
@@ -317,7 +405,10 @@ export function Analytics() {
                 <Stat label="Actual cost" value={money(simulation.data.actualCost)} />
                 <Stat label="Simulated cost" value={money(simulation.data.simulatedCost)} />
                 <Stat label="Difference" value={money(simulation.data.difference)} />
-                <Stat label="Change" value={`${simulation.data.percentChange.toFixed(2)}%`} />
+                <Stat
+                  label="Change"
+                  value={formatPercentage(simulation.data.percentChange, { maximumFractionDigits: 2 })}
+                />
               </div>
             )}
             {simulation.isError && (
@@ -332,18 +423,23 @@ export function Analytics() {
 
 function ChartCard({
   title,
+  description,
   loading,
   empty,
   children,
 }: {
   title: string;
+  description?: string;
   loading: boolean;
   empty: boolean;
   children: React.ReactElement;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="font-semibold">{title}</h3>
+    <div className="analytics-chart-card rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <div className="analytics-chart-header">
+        <h3 className="font-semibold">{title}</h3>
+        {description && <p>{description}</p>}
+      </div>
       {loading ? (
         <p className="mt-6 text-sm text-slate-400">Loading...</p>
       ) : empty ? (

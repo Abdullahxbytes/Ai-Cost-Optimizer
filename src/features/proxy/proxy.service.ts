@@ -1,8 +1,5 @@
-import axios from 'axios';
 import { randomUUID } from 'crypto';
-import { env } from '../../config/env';
 import { providerKeysService } from '../provider-keys/provider-keys.service';
-import { DEFAULT_RATE_LIMIT_PER_MINUTE } from '../../config/constants';
 import { redis } from '../../config/redis';
 import { AuthenticatedAgent } from '../../middleware/agentAuth';
 import {
@@ -10,7 +7,6 @@ import {
   BudgetExceededError,
   ForbiddenError,
   ProviderError,
-  RateLimitError,
 } from '../../utils/errors';
 import { logger } from '../../utils/logger';
 import { Budget, BudgetScope, budgetsRepository } from '../budgets/budgets.repository';
@@ -23,6 +19,7 @@ import { openaiProvider } from './providers/openai.provider';
 import { ProviderAdapter, ProviderName, ProviderResponse } from './providers/provider.types';
 import { autocorrectPromptText } from './prompt-autocorrect.service';
 import { proxyRepository } from './proxy.repository';
+import { cacheEngine, CacheOptions, CacheResult } from '../optimization/cache/cache.engine';
 
 type ProviderConfiguration = {
   adapter: ProviderAdapter;
@@ -32,6 +29,7 @@ export type ProxyForwardResult = {
   response: ProviderResponse;
   latencyMs: number;
   cacheHit: boolean;
+  cacheResult?: CacheResult;
   originalTokenCount?: number;
   optimizedTokenCount?: number;
   budgetReservation?: BudgetReservation;
@@ -169,14 +167,6 @@ function calculateCostUsd(
   return cost.toFixed(4);
 }
 
-function getRateLimitWindow(now = Date.now()): { keySuffix: number; retryAfter: number } {
-  const minuteWindow = Math.floor(now / 60_000);
-  return {
-    keySuffix: minuteWindow,
-    retryAfter: Math.max(1, 60 - Math.floor((now % 60_000) / 1_000)),
-  };
-}
-
 function estimateTokens(text: string): number {
   // Approximate English token estimate for savings comparison; provider usage remains authoritative.
   return Math.ceil(text.length / 4);
@@ -206,14 +196,6 @@ async function optimizeRequestBody(
   };
 }
 
-async function enforceRateLimit(agentId: string): Promise<void> {
-  const window = getRateLimitWindow();
-  const key = `ratelimit:agent:${agentId}:${window.keySuffix}`;
-  const count = await redis.incr(key);
-  if (count === 1) await redis.expire(key, 60);
-  if (count > DEFAULT_RATE_LIMIT_PER_MINUTE) throw new RateLimitError(window.retryAfter);
-}
-
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -227,12 +209,24 @@ function isTimeoutError(error: unknown): boolean {
   );
 }
 
+function safeErrorMetadata(error: unknown) {
+  if (typeof error !== 'object' || error === null) return { errorName: 'UnknownError' };
+  return {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    errorCode: 'code' in error && typeof error.code === 'string' ? error.code : undefined,
+  };
+}
+
 function providerMessage(data: unknown): string | undefined {
   if (typeof data !== 'object' || data === null) return undefined;
   const error = (data as { error?: unknown }).error;
   if (typeof error !== 'object' || error === null) return undefined;
   const message = (error as { message?: unknown }).message;
-  return typeof message === 'string' ? message.slice(0, 500) : undefined;
+  if (typeof message !== 'string') return undefined;
+  return message
+    .replace(/(?:sk|AIza|agt_)[A-Za-z0-9_\-]{8,}/g, '[REDACTED]')
+    .replace(/(api[_ -]?key|authorization|bearer|token|secret)\s*[:=]?\s*[^\s,;]+/gi, '$1 [REDACTED]')
+    .slice(0, 500);
 }
 
 async function forwardWithRetries(
@@ -343,94 +337,51 @@ async function acquireBudgetReservation(agent: AuthenticatedAgent, isTest: boole
   return { applicableBudgets, locks };
 }
 
-async function createEmbedding(prompt: string): Promise<number[] | null> {
-  if (!env.GEMINI_API_KEY) return null;
-  const response = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/${env.EMBEDDING_MODEL}:embedContent`,
-    {
-      model: `models/${env.EMBEDDING_MODEL}`,
-      taskType: 'SEMANTIC_SIMILARITY',
-      outputDimensionality: 768,
-      content: { parts: [{ text: prompt }] },
-    },
-    { headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'Content-Type': 'application/json' } }
-  );
-  const embedding = response.data?.embedding?.values;
-  return Array.isArray(embedding) && embedding.length === 768 && embedding.every((value) => typeof value === 'number')
-    ? embedding
-    : null;
-}
-
-function reconstructCachedResponse(responseText: string): unknown | null {
-  try {
-    const parsed: unknown = JSON.parse(responseText);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return parsed;
-    const response = { ...(parsed as Record<string, unknown>) };
-    if (typeof response.id === 'string') response.id = `cache-${randomUUID()}`;
-    if (typeof response.created === 'number') response.created = Math.floor(Date.now() / 1000);
-    if (typeof response.created_at === 'string') response.created_at = new Date().toISOString();
-    return response;
-  } catch {
-    return null;
-  }
-}
-
-async function findCachedResponse(
-  provider: ProviderName,
-  body: unknown,
-  agent: AuthenticatedAgent
-): Promise<ProviderResponse | null> {
-  const settings = await optimizationRepository.getSettings(agent.id);
-  if (!settings?.semanticCacheEnabled) return null;
-
-  const prompt = extractPromptText(provider, body);
-  if (!prompt) return null;
-
-  try {
-    const embedding = await createEmbedding(prompt);
-    if (!embedding) return null;
-    const match = await optimizationRepository.findClosestMatch(agent.orgId, agent.id, embedding);
-    if (!match || match.similarity < settings.cacheSimilarityThreshold) return null;
-    const data = reconstructCachedResponse(match.responseText);
-    if (data === null) return null;
-    await optimizationRepository.incrementHitCount(match.id);
-    return { status: 200, data, headers: { contentType: 'application/json' } };
-  } catch (error) {
-    logger.warn({ error, agentId: agent.id }, 'Semantic cache lookup failed; forwarding request');
-    return null;
-  }
-}
-
 export const proxyService = {
   async forward(
     provider: string,
     path: string,
     body: unknown,
     agent: AuthenticatedAgent,
-    isTest: boolean
+    isTest: boolean,
+    cacheOptions?: CacheOptions
   ): Promise<ProxyForwardResult> {
     if (await redis.get(`killswitch:agent:${agent.id}`)) {
       throw new ForbiddenError('Agent killed');
     }
 
     const budgetReservation = await acquireBudgetReservation(agent, isTest);
+    let cacheResult: CacheResult | undefined;
     try {
-      await enforceRateLimit(agent.id);
       const configuration = getProviderConfiguration(provider);
       const providerName = provider as ProviderName;
-      const cachedResponse = await findCachedResponse(providerName, body, agent);
-      if (cachedResponse) {
-        if (budgetReservation) await releaseBudgetLocks(budgetReservation.locks);
-        return { response: cachedResponse, latencyMs: 0, cacheHit: true };
+      const { adapter } = configuration;
+      const credential = await providerKeysService.getCredential(agent.orgId, providerName);
+      if (!credential) throw new AppError(400, 'No API key configured for this provider. Add one in your organization settings.', 'PROVIDER_KEY_MISSING');
+      const startedAt = Date.now();
+      const normalizedPath = normalizePath(path);
+      if (cacheOptions && !isTest) {
+        cacheResult = await cacheEngine.prepare({ agent, provider: providerName, path: normalizedPath, body, credentialVersion: credential.version, options: cacheOptions });
+        if (cacheResult.response) {
+          if (budgetReservation) await releaseBudgetLocks(budgetReservation.locks);
+          await cacheEngine.record(cacheResult);
+          return { response: cacheResult.response, latencyMs: Date.now() - startedAt, cacheHit: true, cacheResult };
+        }
       }
       const optimizedRequest = await optimizeRequestBody(providerName, body, agent);
-      const { adapter } = configuration;
-      const apiKey = await providerKeysService.getPlaintext(agent.orgId, providerName);
-      if (!apiKey) throw new AppError(400, 'No API key configured for this provider. Add one in your organization settings.', 'PROVIDER_KEY_MISSING');
-      const startedAt = Date.now();
-      const response = await forwardWithRetries(adapter, normalizePath(path), optimizedRequest.body, apiKey, startedAt);
-      return { response, latencyMs: Date.now() - startedAt, cacheHit: false, originalTokenCount: optimizedRequest.originalTokenCount, optimizedTokenCount: optimizedRequest.optimizedTokenCount, budgetReservation };
+      const response = await forwardWithRetries(adapter, normalizedPath, optimizedRequest.body, credential.plaintext, startedAt);
+      if (cacheResult) {
+        await cacheEngine.afterProvider({ agent, provider: providerName, result: cacheResult, response });
+        await cacheEngine.record(cacheResult);
+      }
+      return { response, latencyMs: Date.now() - startedAt, cacheHit: false, cacheResult, originalTokenCount: optimizedRequest.originalTokenCount, optimizedTokenCount: optimizedRequest.optimizedTokenCount, budgetReservation };
     } catch (error) {
+      if (cacheResult) {
+        await cacheEngine.abort(cacheResult);
+        cacheResult.diagnostic.outcome = 'provider_error';
+        cacheResult.diagnostic.reason = 'provider_failed_after_cache_miss';
+        await cacheEngine.record(cacheResult);
+      }
       if (budgetReservation) await releaseBudgetLocks(budgetReservation.locks);
       throw error;
     }
@@ -495,11 +446,27 @@ export const proxyService = {
       }
     } catch (error) {
       logger.warn(
-        { error, provider: input.provider, model, agentId: input.agent.id },
+        { ...safeErrorMetadata(error), provider: input.provider, model, agentId: input.agent.id },
         'Unable to record proxy usage event'
       );
     } finally {
       if (input.budgetReservation) await releaseBudgetLocks(input.budgetReservation.locks);
+    }
+  },
+
+  async recordCacheHitUsage(input: UsageLoggingInput): Promise<void> {
+    const model = getModel(input.body, input.path);
+    if (!model) return;
+    try {
+      await proxyRepository.insertUsageEvent({
+        orgId: input.agent.orgId, agentId: input.agent.id, taskId: input.taskId,
+        provider: input.provider, model, environment: input.environment,
+        inputTokens: 0, outputTokens: 0, costUsd: '0.0000',
+        latencyMs: input.latencyMs, isTest: input.isTest, cacheHit: true,
+        originalTokenCount: 0, optimizedTokenCount: 0,
+      });
+    } catch (error) {
+      logger.warn({ ...safeErrorMetadata(error), provider: input.provider, model, agentId: input.agent.id }, 'Unable to record cache hit usage');
     }
   },
 
@@ -522,62 +489,10 @@ export const proxyService = {
       });
     } catch (error) {
       logger.warn(
-        { error, provider: input.provider, model, agentId: input.agent.id },
+        { ...safeErrorMetadata(error), provider: input.provider, model, agentId: input.agent.id },
         'Unable to record failed proxy usage event'
       );
     }
   },
 
-  async recordCacheHitUsage(input: Omit<UsageLoggingInput, 'response' | 'latencyMs'>): Promise<void> {
-    const model = getModel(input.body, input.path) ?? 'unknown';
-    try {
-      await proxyRepository.insertUsageEvent({
-        orgId: input.agent.orgId,
-        agentId: input.agent.id,
-        taskId: input.taskId,
-        provider: input.provider,
-        model,
-        environment: input.environment,
-        inputTokens: 0,
-        outputTokens: 0,
-        costUsd: '0.0000',
-        latencyMs: 0,
-        isTest: input.isTest,
-        cacheHit: true,
-      });
-    } catch (error) {
-      logger.warn(
-        { error, provider: input.provider, model, agentId: input.agent.id },
-        'Unable to record semantic cache usage event'
-      );
-    }
-  },
-
-  async cacheSuccessfulResponse(input: UsageLoggingInput): Promise<void> {
-    if (input.isTest || input.response.status < 200 || input.response.status >= 300) return;
-
-    try {
-      const settings = await optimizationRepository.getSettings(input.agent.id);
-      if (!settings?.semanticCacheEnabled) return;
-
-      const prompt = extractPromptText(input.provider, input.body);
-      if (!prompt) return;
-
-      const embedding = await createEmbedding(prompt);
-      if (!embedding) return;
-      await optimizationRepository.insertCacheEntry({
-        orgId: input.agent.orgId,
-        agentId: input.agent.id,
-        embedding,
-        queryText: prompt,
-        responseText: JSON.stringify(input.response.data),
-        expiresAt: new Date(Date.now() + settings.cacheTtlSeconds * 1000),
-      });
-    } catch (error) {
-      logger.warn(
-        { error, provider: input.provider, agentId: input.agent.id },
-        'Unable to write semantic cache entry'
-      );
-    }
-  },
 };

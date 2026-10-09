@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, lt, sql } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { optimizationRules, semanticCache } from './optimization.schema.db';
 
@@ -18,26 +18,15 @@ export const DEFAULT_OPTIMIZATION_SETTINGS: OptimizationSettings = {
   cacheTtlSeconds: 3600,
 };
 
-export type SemanticCacheMatch = {
-  id: string;
-  responseText: string;
-  similarity: number;
-};
-
-export type SemanticCacheEntryInput = {
-  orgId: string;
-  agentId: string;
-  embedding: number[];
-  queryText: string;
-  responseText: string;
-  expiresAt: Date;
-};
-
-function vectorLiteral(embedding: number[]): string {
-  return `[${embedding.join(',')}]`;
-}
-
 export const optimizationRepository = {
+  async getCacheTransformationVersion(agentId: string): Promise<string> {
+    const [row] = await db
+      .select({ promptOptimizationEnabled: optimizationRules.promptOptimizationEnabled, updatedAt: optimizationRules.updatedAt })
+      .from(optimizationRules)
+      .where(eq(optimizationRules.agentId, agentId))
+      .limit(1);
+    return row ? `${row.promptOptimizationEnabled ? 'on' : 'off'}:${row.updatedAt.toISOString()}` : 'off:default';
+  },
   async getSettings(agentId: string): Promise<OptimizationSettings | null> {
     const [settings] = await db
       .select({
@@ -96,51 +85,6 @@ export const optimizationRepository = {
       });
 
     return (await this.getSettings(agentId)) ?? DEFAULT_OPTIMIZATION_SETTINGS;
-  },
-
-  async findClosestMatch(
-    orgId: string,
-    agentId: string,
-    embedding: number[]
-  ): Promise<SemanticCacheMatch | null> {
-    const queryEmbedding = vectorLiteral(embedding);
-    const [match] = await db
-      .select({
-        id: semanticCache.id,
-        responseText: semanticCache.responseText,
-        similarity: sql<number>`1 - (${semanticCache.embedding} <=> ${queryEmbedding}::vector)`,
-      })
-      .from(semanticCache)
-      .where(
-        and(
-          eq(semanticCache.orgId, orgId),
-          eq(semanticCache.agentId, agentId),
-          gt(semanticCache.expiresAt, new Date())
-        )
-      )
-      .orderBy(asc(sql`${semanticCache.embedding} <=> ${queryEmbedding}::vector`))
-      .limit(1);
-
-    return match ?? null;
-  },
-
-  async incrementHitCount(id: string): Promise<void> {
-    await db
-      .update(semanticCache)
-      .set({ hitCount: sql`${semanticCache.hitCount} + 1`, updatedAt: new Date() })
-      .where(eq(semanticCache.id, id));
-  },
-
-  async insertCacheEntry(input: SemanticCacheEntryInput): Promise<void> {
-    await db.insert(semanticCache).values({
-      orgId: input.orgId,
-      agentId: input.agentId,
-      embedding: input.embedding,
-      queryText: input.queryText,
-      responseText: input.responseText,
-      hitCount: 0,
-      expiresAt: input.expiresAt,
-    });
   },
 
   async deleteExpiredEntries(now = new Date()): Promise<number> {

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { AppError, AuthError, ForbiddenError } from '../utils/errors';
 import { userRepository } from '../features/user/user.repository';
+import { dashboardRateLimits } from './rateLimits';
 
 export type Role = 'super_admin' | 'org_admin' | 'team_lead' | 'developer' | 'finance' | 'auditor';
 export type AuthenticatedUser = { id: string; orgId: string | null; role: Role };
@@ -37,12 +38,14 @@ export async function authenticate(request: FastifyRequest) {
       if (current.tokenVersion !== payload.token_version)
         throw new AuthError('Invalid or expired session token');
       request.user = { id: current.id, orgId: payload.org_id, role: current.role as Role };
+      await dashboardRateLimits(request);
       return;
     }
     const current = await userRepository.findCurrentSuperAdmin(payload.user_id);
     if (!current || current.tokenVersion !== payload.token_version)
       throw new AuthError('Invalid or expired session token');
     request.user = { id: payload.user_id, orgId: null, role: payload.role as Role };
+    await dashboardRateLimits(request);
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AuthError('Invalid or expired session token');

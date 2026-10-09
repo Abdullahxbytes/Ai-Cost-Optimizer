@@ -177,7 +177,7 @@ resource "aws_elasticache_cluster" "redis" {
 
 resource "aws_instance" "app" {
   ami                         = data.aws_ssm_parameter.ubuntu_2404.value
-  instance_type               = "t2.micro"
+  instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.app[0].id
   vpc_security_group_ids      = [aws_security_group.app.id]
   key_name                    = var.key_pair_name
@@ -190,6 +190,8 @@ resource "aws_instance" "app" {
     jwt_secret_b64                     = base64encode(var.jwt_secret)
     agent_key_hmac_secret_b64          = base64encode(var.agent_key_hmac_secret)
     provider_key_encryption_secret_b64 = base64encode(var.provider_key_encryption_secret)
+    totp_encryption_secret_b64         = base64encode(var.totp_encryption_secret)
+    cors_origins_b64                   = base64encode(var.cors_origins)
     gemini_api_key_b64                 = base64encode(var.gemini_api_key)
   })
   tags = merge(local.tags, { Name = "${local.name}-app" })

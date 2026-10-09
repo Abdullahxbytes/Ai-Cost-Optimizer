@@ -6,16 +6,12 @@ import { canAccessAgent } from '../../middleware/rbac';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../utils/errors';
 import { agentsRepository } from './agents.repository';
 import { auditRepository } from '../audit/audit.repository';
+import { csvCell } from '../../utils/validators';
 
 function maskApiKey(apiKey: string) {
   return `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}`;
 }
 const exportsDirectory = path.resolve(process.cwd(), 'exports');
-
-function csvEscape(value: unknown) {
-  const text = String(value ?? '');
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 async function writeUsageExport(agentId: string, deletionId: string) {
   const history = await agentsRepository.usageHistoryForExport(agentId);
@@ -33,7 +29,7 @@ async function writeUsageExport(agentId: string, deletionId: string) {
   ];
   await mkdir(exportsDirectory, { recursive: true });
   const filePath = path.join(exportsDirectory, `${deletionId}.csv`);
-  await writeFile(filePath, rows.map((row) => row.map(csvEscape).join(',')).join('\n'), 'utf8');
+  await writeFile(filePath, rows.map((row) => row.map(csvCell).join(',')).join('\n'), 'utf8');
   return filePath;
 }
 function publicAgent(

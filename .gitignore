@@ -2,9 +2,12 @@ node_modules/
 dist/
 .env
 .env.local
+.env.production
 *.log
 .DS_Store
 coverage/
+backups/
+proxy-sanity.err
 exports/
 .idea/
 *.swp
@@ -15,6 +18,8 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/terraform.tfvars
+terraform/tfplan
+terraform/*.tfplan
 terraform/crash.log
 
 # Deployment keys and compose overrides

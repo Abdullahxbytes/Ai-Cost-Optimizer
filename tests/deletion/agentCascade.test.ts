@@ -13,7 +13,7 @@ import { testApp } from '../helpers/auth';
 import { createBudget, geminiRequest, geminiSuccess, seedFinancialFixture } from '../helpers/financial';
 
 describe('agent deletion export, confirmation, and cascade integrity', () => {
-  it('exports history, preserves pending-deletion proxy use, enforces recipient-only flow, and deletes all owned data', async () => {
+  it('exports history, blocks pending-deletion proxy use, enforces recipient-only flow, and deletes all owned data', async () => {
     const f = await seedFinancialFixture({ agentCount: 1 }); const app = await testApp(); const agent = f.agents[0]; const taskId = randomUUID(); const spy = jest.spyOn(axios, 'post').mockResolvedValue(geminiSuccess(10, 5) as never);
     try {
       const [other] = await db.insert(users).values({ orgId: f.org.id, email: `other-${randomUUID()}@example.test`, passwordHash: 'not-used', role: 'developer' }).returning();
@@ -26,7 +26,7 @@ describe('agent deletion export, confirmation, and cascade integrity', () => {
 
       const requested = await app.inject({ method: 'POST', url: `/agents/${agent.id}/request-deletion`, headers: { authorization: `Bearer ${f.adminToken}` } });
       expect(requested.statusCode).toBe(200); const deletionId = requested.json().id as string;
-      const pendingProxy = await app.inject(geminiRequest(agent.rawKey)); expect(pendingProxy.statusCode).toBe(200); expect(spy).toHaveBeenCalledTimes(1);
+      const pendingProxy = await app.inject(geminiRequest(agent.rawKey)); expect(pendingProxy.statusCode).toBe(403); expect(spy).not.toHaveBeenCalled();
       const otherHeaders = { authorization: `Bearer ${f.adminToken}` }; // alter token below to a real different-user token
       const { tenantToken } = await import('../helpers/auth'); const recipientDeniedHeaders = { authorization: `Bearer ${tenantToken(other)}` };
       expect((await app.inject({ method: 'GET', url: `/agent-deletions/${deletionId}/download`, headers: recipientDeniedHeaders })).statusCode).toBe(403);

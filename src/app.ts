@@ -1,17 +1,28 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
-import { env } from './config/env';
+import { corsOrigins, env } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
-import { logger } from './utils/logger';
+import { logRedactPaths, logger } from './utils/logger';
 import { featureRoutes } from './features/features.routes';
 import { trackEndpointResponse } from './middleware/endpointHealth';
 import { alertScanner } from './jobs/alertScanner';
+import { validateUuidRouteParams } from './middleware/security';
+import { globalEmergencyLimit } from './middleware/rateLimits';
 
 const ALERT_SCAN_INTERVAL_MS = 60_000;
 
 export async function buildApp() {
-  const app = Fastify({ logger: { level: env.LOG_LEVEL }, trustProxy: true });
+  const app = Fastify({
+    logger: {
+      level: env.LOG_LEVEL,
+      redact: { paths: logRedactPaths, censor: '[REDACTED]' },
+    },
+    trustProxy:
+      env.TRUST_PROXY_HOPS === 0
+        ? false
+        : (_address: string, hop: number) => hop < env.TRUST_PROXY_HOPS,
+  });
   let alertScanTimer: NodeJS.Timeout | undefined;
   let alertScanInProgress = false;
 
@@ -22,7 +33,10 @@ export async function buildApp() {
       const result = await alertScanner();
       if (result.triggered > 0) app.log.info(result, 'Budget alerts triggered');
     } catch (error) {
-      app.log.error({ error }, 'Budget alert scan failed');
+      app.log.error(
+        { errorName: error instanceof Error ? error.name : 'UnknownError' },
+        'Budget alert scan failed'
+      );
     } finally {
       alertScanInProgress = false;
     }
@@ -30,10 +44,12 @@ export async function buildApp() {
 
   await app.register(helmet);
   await app.register(cors, {
-    origin: '*',
+    origin: corsOrigins,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setErrorHandler((error, request, reply) => errorHandler(error, request, reply));
+  app.addHook('onRequest', globalEmergencyLimit);
+  app.addHook('preValidation', validateUuidRouteParams);
   app.addHook('onResponse', trackEndpointResponse);
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
   await app.register(featureRoutes);
@@ -53,7 +69,10 @@ async function start() {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
     logger.info(`Server running at http://localhost:${env.PORT}`);
   } catch (error) {
-    logger.error(error);
+    logger.error(
+      { errorName: error instanceof Error ? error.name : 'UnknownError' },
+      'Server startup failed'
+    );
     process.exit(1);
   }
 }

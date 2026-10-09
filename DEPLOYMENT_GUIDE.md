@@ -30,6 +30,32 @@ terraform apply tfplan
 
 Terraform outputs the Elastic IP and internal RDS/Redis endpoints. EC2 bootstrap clones `main`, writes `/opt/costflow/.env`, and runs `docker compose -f docker-compose.production.yml up -d --build`.
 
+## Direct deployment from this Windows machine
+
+For the existing EC2 instance, deploy directly from your computer instead of using GitHub authentication. The script archives the local project, excludes Terraform and credentials, uploads a separate production environment file over SSH, installs Docker if needed, and starts the production stack.
+
+First create your private production file from the tracked template and replace every placeholder with your AWS endpoints and generated secrets:
+
+```powershell
+Copy-Item .env.production.example .env.production
+```
+
+From the repository root in PowerShell:
+
+```powershell
+.\scripts\deploy-ec2.ps1 `
+  -KeyPath "$HOME\.ssh\cost-optimizer-key.pem" `
+  -Host "44.193.109.138"
+```
+
+The private `.env.production` file is required and remains untracked. To upload a differently named file, add `-EnvFile ".env.my-production"`.
+
+When the script completes, verify the public health endpoint:
+
+```powershell
+curl http://44.193.109.138/health
+```
+
 ## Verify
 
 Wait several minutes for RDS, ElastiCache, and cloud-init to finish, then run:
@@ -54,12 +80,7 @@ The browser application is available at `http://<elastic-ip>/`; API traffic is r
 
 ## Update an existing deployment
 
-```bash
-ssh -i /path/to/keypair.pem ubuntu@<elastic-ip>
-cd /opt/costflow
-sudo git pull --ff-only origin main
-sudo docker compose -f docker-compose.production.yml up -d --build
-```
+Run the same `scripts/deploy-ec2.ps1` command above. It replaces the application files on EC2 with the local project files and rebuilds the containers; no GitHub access is required.
 
 ## Troubleshooting
 

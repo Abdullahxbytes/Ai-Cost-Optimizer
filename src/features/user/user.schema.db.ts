@@ -28,6 +28,7 @@ export const users = pgTable(
     active: boolean('active').default(true).notNull(),
     tokenVersion: integer('token_version').default(0).notNull(),
     twoFactorSecret: text('two_factor_secret'),
+    twoFactorLastTimeStep: integer('two_factor_last_time_step'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -44,6 +45,7 @@ export const superAdmins = pgTable('super_admins', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   twoFactorSecret: text('two_factor_secret'),
+  twoFactorLastTimeStep: integer('two_factor_last_time_step'),
   tokenVersion: integer('token_version').default(0).notNull(),
   // A removed Super Admin must not block hard deletion of their successors.
   createdBy: uuid('created_by').references((): AnyPgColumn => superAdmins.id, { onDelete: 'set null' }),

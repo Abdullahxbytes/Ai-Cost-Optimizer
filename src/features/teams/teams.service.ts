@@ -8,6 +8,7 @@ import { alertHistory, alerts } from '../alerts/alerts.schema.db';
 import { auditLog } from '../audit/audit.schema.db';
 import { budgetRequests, budgets } from '../budgets/budgets.schema.db';
 import { notificationsRepository } from '../notifications/notifications.repository';
+import { csvCell } from '../../utils/validators';
 import { usageEvents } from '../proxy/proxy.schema.db';
 import { users } from '../user/user.schema.db';
 import { teamDeletions, teamMembers, teams } from './teams.schema.db';
@@ -132,7 +133,7 @@ export const teamsService = {
     const rows = await db.select({ agentName: agents.name, createdAt: usageEvents.createdAt, provider: usageEvents.provider, model: usageEvents.model, inputTokens: usageEvents.inputTokens, outputTokens: usageEvents.outputTokens, costUsd: usageEvents.costUsd, status: usageEvents.status })
       .from(usageEvents).innerJoin(agents, eq(usageEvents.agentId, agents.id)).where(eq(agents.teamId, team.id));
     const csv = [['team', 'agent', 'timestamp', 'provider', 'model', 'input_tokens', 'output_tokens', 'cost_usd', 'status'], ...rows.map((row) => [team.name, row.agentName, row.createdAt.toISOString(), row.provider, row.model, row.inputTokens, row.outputTokens, row.costUsd, row.status])]
-      .map((row) => row.map((value) => { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }).join(',')).join('\n');
+      .map((row) => row.map(csvCell).join(',')).join('\n');
     return { team, csv };
   },
 

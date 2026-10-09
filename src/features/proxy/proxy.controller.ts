@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ProviderName } from './providers/provider.types';
 import { proxyService } from './proxy.service';
-import { ProviderError } from '../../utils/errors';
+import { ProviderError, ValidationError } from '../../utils/errors';
 
 export type ProxyRouteParams = { provider: string; '*': string };
 
@@ -30,22 +30,27 @@ export const proxyController = {
   async forward(request: FastifyRequest<{ Params: ProxyRouteParams }>, reply: FastifyReply) {
     // agentAuth has already authenticated this request and attached request.agent.
     const path = getForwardPath(request);
-    const isTest = getHeaderValue(request, 'x-is-test') === 'true';
+    if (getHeaderValue(request, 'x-is-test') !== undefined) {
+      throw new ValidationError('X-Is-Test is not accepted on the public proxy');
+    }
+    const isTest = false;
     const taskId = getHeaderValue(request, 'x-task-id') ?? randomUUID();
     const environment = getEnvironment(request);
     let response;
     let latencyMs;
-    let cacheHit;
     let originalTokenCount;
     let optimizedTokenCount;
     let budgetReservation;
+    let cacheHit = false;
+    let cacheResult;
     try {
-      ({ response, latencyMs, cacheHit, originalTokenCount, optimizedTokenCount, budgetReservation } = await proxyService.forward(
+      ({ response, latencyMs, originalTokenCount, optimizedTokenCount, budgetReservation, cacheHit, cacheResult } = await proxyService.forward(
         request.params.provider,
         path,
         request.body,
         request.agent,
-        isTest
+        isTest,
+        { environment, taskId, userContextToken: getHeaderValue(request, 'x-costflow-user-context') }
       ));
     } catch (error) {
       if (error instanceof ProviderError) {
@@ -86,22 +91,11 @@ export const proxyController = {
       budgetReservation,
     };
 
-    if (cacheHit) {
-      void proxyService.recordCacheHitUsage({
-        agent: usageInput.agent,
-        provider: usageInput.provider,
-        path: usageInput.path,
-        body: usageInput.body,
-        taskId: usageInput.taskId,
-        environment: usageInput.environment,
-        isTest: usageInput.isTest,
-      });
-    } else {
-      // The reservation is deliberately held until the exact provider cost is recorded.
-      await proxyService.recordSuccessfulUsage(usageInput);
-      void proxyService.cacheSuccessfulResponse(usageInput);
-    }
+    if (cacheHit) await proxyService.recordCacheHitUsage(usageInput);
+    else await proxyService.recordSuccessfulUsage(usageInput);
 
+    reply.header('x-costflow-cache', cacheResult?.outcome ?? 'bypass');
+    if (cacheResult) reply.header('x-costflow-cache-reason', cacheResult.reason);
     reply.status(response.status).send(response.data);
     return reply;
   },

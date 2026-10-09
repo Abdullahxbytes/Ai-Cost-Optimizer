@@ -24,6 +24,7 @@ export * from '../features/budgets/budgets.schema.db';
 export * from '../features/pricing/pricing.schema.db';
 export * from '../features/proxy/proxy.schema.db';
 export * from '../features/optimization/optimization.schema.db';
+export * from '../features/optimization/cache/cache.schema.db';
 export * from '../features/alerts/alerts.schema.db';
 export * from '../features/audit/audit.schema.db';
 export * from '../features/notifications/notifications.schema.db';

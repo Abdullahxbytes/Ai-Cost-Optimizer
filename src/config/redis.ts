@@ -2,7 +2,9 @@ import { createClient } from 'redis';
 import { env } from './env';
 export const redis = createClient({ url: env.REDIS_URL });
 
-redis.on('error', (error) => process.stderr.write(`Redis error: ${error.message}\n`));
+redis.on('error', (error) =>
+  process.stderr.write(`Redis error: ${error instanceof Error ? error.name : 'UnknownError'}\n`)
+);
 redis
   .connect()
   .then(() => {
@@ -12,4 +14,4 @@ redis
       redis.unref();
     }
   })
-  .catch((error: Error) => process.stderr.write(`Redis connection failed: ${error.message}\n`));
+  .catch((error: Error) => process.stderr.write(`Redis connection failed: ${error.name}\n`));

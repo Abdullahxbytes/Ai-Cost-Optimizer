@@ -67,6 +67,17 @@ variable "provider_key_encryption_secret" {
   sensitive   = true
 }
 
+variable "totp_encryption_secret" {
+  description = "32+ character secret used to encrypt tenant and platform TOTP secrets."
+  type        = string
+  sensitive   = true
+}
+
+variable "cors_origins" {
+  description = "Comma-separated browser origins allowed to call the API."
+  type        = string
+}
+
 variable "gemini_api_key" {
   description = "Optional Gemini key used for semantic-cache embeddings. Organization provider keys remain managed in CostFlow."
   type        = string

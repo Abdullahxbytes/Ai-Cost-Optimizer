@@ -9,6 +9,7 @@ import { Analytics } from './pages/Analytics';
 import { Budgets } from './pages/Budgets';
 import { Dashboard } from './pages/Dashboard';
 import { Landing } from './pages/Landing';
+import { Legal } from './pages/Legal';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Notifications } from './pages/Notifications';
@@ -45,6 +46,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/privacy" element={<Legal title="Privacy" />} />
+      <Route path="/terms" element={<Legal title="Terms" />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route element={<ProtectedRoute />}>
